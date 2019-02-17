@@ -1,0 +1,11 @@
+language: node_js
+node_js: node
+services:
+- mongodb
+deploy:
+  provider: heroku
+  api_key:
+    secure: OMR9Gftk78d5czkjeqi0JN7yfAR8tcJMidz4jAKms6PS/DCAtf6oEnr97z+09828BIEx7OhCfHUMrojY4TibKpYD5VL2qNptobyxgPCD6E/N8R5aXUy6doaa4A3zcMZ1RtMZQ90F2NhNQVH18y+zrmX9QaaBNnqlvQ9Qiwjdy6lGhvjokag5s3ng0GRDVtGzHbS+0pNMI3F7fEku8bIQNGZbqXyvAewNnFkphMzTE8rv7+UyWRDTB8tBRrgpku7HaKpm7ulhgFFU6v5GGeLtgS17k43uCvW0XOv6WDKawO7PbNLqqHy9I+jZghGHS1gplJr9qASOR22wlZtAvBtD+nvDpY2Xdf+XYZhkEynx2pNzR7xOIdRdmRlbWlMeyyyts7goX7Wa0C9Pn94ImMmNiDUthVi7WoHEuQH6zLAffgH6o1QzCaJmjJh10+hk61hlxO74v7DQE+JKGCmisRcoBOi9VuYgDPPAfOSNnqSS181mxcL3TioxNlPB4+fcM0+Bg6CQQCCfHfAj6zOB+KbwpIbIXB1VtZx6eQhAlGkSi8TokSDykmoOZeJWUfH+74tNrbnJAEdWrPuN/R3Y1kjcDTaghL1K1UDeto6rczRotDdU+N5Qva2wI3BNU0dW3LOyQCufYmPKALCsN7tTtK2jPcjTwixyL0NVLCGoZNAbevg=
+  app: pure-beach-79220
+  on:
+    repo: bibiqiqi/seepage-api
