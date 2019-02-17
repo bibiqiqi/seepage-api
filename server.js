@@ -1,7 +1,15 @@
 const express = require('express');
- const app = express();
+const app = express();
+const cors = require('cors');
 
- const PORT = process.env.PORT || 3000;
+const {CLIENT_ORIGIN} = require('./config');
+const PORT = process.env.PORT || 3000;
+
+ app.use(
+     cors({
+         origin: CLIENT_ORIGIN
+     })
+ );
 
  app.get('/api/*', (req, res) => {
    res.json({ok: true});
