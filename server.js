@@ -1,20 +1,75 @@
+require('dotenv').config();
+
 const express = require('express');
-const app = express();
+const passport = require('passport');
+const mongoose = require('mongoose');
+const morgan = require('morgan');
 const cors = require('cors');
 
-const {CLIENT_ORIGIN} = require('./config');
-const PORT = process.env.PORT || 3000;
+const { registerRouter, protectedRouter, authRouter, localStrategy, jwtStrategy } = require('./editors');
 
- app.use(
-     cors({
-         origin: CLIENT_ORIGIN
-     })
- );
+mongoose.Promise = global.Promise;
 
- app.get('/api/*', (req, res) => {
-   res.json({ok: true});
- });
+const {CLIENT_ORIGIN, DATABASE_URL, PORT} = require('./config');
 
- app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
+const app = express();
 
- module.exports = {app};
+app.use(
+   cors({
+       origin: CLIENT_ORIGIN
+   })
+);
+
+passport.use(localStrategy);
+passport.use(jwtStrategy);
+
+//app.use('/users', usersRouter);
+app.use('/editors/register', registerRouter);
+app.use('/editors/auth', authRouter);
+app.use('/editors/protected', protectedRouter);
+
+app.use('*', function (req, res) {
+  res.status(404).json({ message: 'Not Found' });
+});
+
+let server;
+
+function runServer(databaseUrl, port = PORT) {
+  return new Promise((resolve, reject) => {
+    mongoose.connect(encodeURI(databaseUrl), err => {
+      if (err) {
+        return reject(err);
+      } else {
+        console.log('connected to', databaseUrl);
+      }
+      server = app.listen(port, () => {
+        console.log(`Your app is listening on port ${port}`);
+        resolve();
+      })
+        .on('error', err => {
+          mongoose.disconnect();
+          reject(err);
+        });
+    });
+  });
+}
+
+function closeServer() {
+  return mongoose.disconnect().then(() => {
+    return new Promise((resolve, reject) => {
+      console.log('Closing server');
+      server.close(err => {
+        if (err) {
+          return reject(err);
+        }
+        resolve();
+      });
+    });
+  });
+}
+
+if (require.main === module) {
+  runServer(DATABASE_URL).catch(err => console.error(err));
+}
+
+module.exports = { runServer, app, closeServer };
