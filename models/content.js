@@ -1,33 +1,26 @@
 'use strict';
-const bcrypt = require('bcryptjs');
+
 const mongoose = require('mongoose');
 
-const EditorSchema = mongoose.Schema({
-  shortId: {type: String, require: true, unique: true},
-  name: {type: String, require: true},
+mongoose.Promise = global.Promise;
+
+const ContentSchema = mongoose.Schema({
+  artistName: {type: String, require: true},
   title: {type: String, require: true},
   category: {type: String, require: true},
-  tags: {}
+  tags: {type: [String], require: true},
 });
 
-EditorSchema.methods.serialize = function() {
+ContentSchema.methods.serialize = function() {
   return {
-    shortId: this.shortId || '',
-    email: this.email || '',
-    firstName: this.firstName || '',
-    lastName: this.lastName || ''
+    id: this._id,
+    artistName: this.artistName,
+    title: this.title,
+    category: this.category,
+    tags: this.tags,
   }
 }
 
-EditorSchema.methods.validatePassword = function(password) {
-  return bcrypt.compare(password, this.password);
-};
-
-EditorSchema.statics.hashPassword = function(password) {
-  return bcrypt.hash(password, 10);
-};
-
-const Editor = mongoose.model('Editor', EditorSchema);
 const Content = mongoose.model('Content', ContentSchema);
 
-module.exports = {Editor, Content};
+module.exports = {Content};

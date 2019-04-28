@@ -6,14 +6,13 @@
 // const jwt = require('jsonwebtoken');
 //
 // const { app, runServer, closeServer } = require('../server');
-// const { Editor } = require('../editors/models')
+// const { Editor } = require('../models/editor')
 // const { JWT_SECRET, TEST_DATABASE_URL, PORT } = require('../config');
 //
 // const expect = chai.expect;
 //
 // chai.use(chaiHttp);
 //
-// const shortId = 1234;
 // const email = 'EddieEditor@aol.com';
 // const password = '1234567891';
 // const firstName = 'Eddie';
@@ -40,7 +39,6 @@
 //   beforeEach(function () {
 //     return Editor.hashPassword(password).then(password => {
 //       Editor.create({
-//         shortId,
 //         email,
 //         password,
 //         firstName,
@@ -103,9 +101,9 @@
 //
 //   describe('auth/refresh', function () {
 //     const user = {
-//       email: email,
-//       firstName: firstName,
-//       lastName: lastName
+//       email,
+//       firstName,
+//       lastName
 //     }
 //     it('Should reject requests with no credentials', function () {
 //       return chai
@@ -137,8 +135,8 @@
 //       const token = jwt.sign(
 //         {
 //           user,
-//           exp: Math.floor(Date.now() / 1000) - 10 // Expired ten seconds ago
-//         },
+//           exp: Math.floor(Date.now() / 1000) - 10
+//         }, // Expired ten seconds ago,
 //         JWT_SECRET,
 //         {
 //           algorithm: 'HS256',
@@ -155,7 +153,7 @@
 //     });
 //     it('Should return a valid auth token with a newer expiration date', function() {
 //       const token = jwt.sign(
-//         { user },
+//         {user},
 //         JWT_SECRET,
 //         {
 //           algorithm: 'HS256',
@@ -183,5 +181,5 @@
 //         });
 //       });
 //     });
-//   })
+//   });
 // })

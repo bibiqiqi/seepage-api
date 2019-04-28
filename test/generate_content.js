@@ -1,6 +1,6 @@
 const _ = require('underscore');
 const casual = require('casual-browserify');
-const coolImages = require('cool-images');
+//const fs = require('fs');
 
 //for each set of data(nodes and links), createTagPool() generates a
 //pool of tags, then generateNodes() generates a random number of nodes,
@@ -52,15 +52,21 @@ const generateContent = () => {
   let i;
   for (i = 0; i < randomNumber; i++) {
     const type = categories[_.random(0, 2)];
+    //const imgData = (imgGen.generateImage(800, 600, 80, function(err, image) {
+      //console.log(image);
+      //return image;
+      //fs.writeFileSync('dummy.jpg', image.data);
+    //});
+
     nodes[i] = {
-      index: i,
-      key: uniqKey++,
-      name: casual.full_name,
+      //index: i,
+      //key: uniqKey++,
+      artistName: casual.full_name,
       title: casual.title,
-      color: type.color,
+      //color: type.color,
       category: type.category,
       tags: _.uniq(_.sortBy(pickTags(tagPool)), true),
-      content: coolImages.one()
+      //content: fs.readFileSync('./dummyArt.jpg')
     };
  }
  //console.log('nodes', nodes);

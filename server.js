@@ -5,8 +5,9 @@ const passport = require('passport');
 const mongoose = require('mongoose');
 const morgan = require('morgan');
 const cors = require('cors');
+const methodOverride = require('method-override');
 
-const { registerRouter, protectedRouter, authRouter, localStrategy, jwtStrategy } = require('./editors');
+const { registerRouter, authRouter, contentRouter, protectedRouter, localStrategy, jwtStrategy } = require('./endpoints');
 
 mongoose.Promise = global.Promise;
 
@@ -22,11 +23,13 @@ app.use(
 
 passport.use(localStrategy);
 passport.use(jwtStrategy);
-
+app.use(methodOverride('_method'));
 //app.use('/users', usersRouter);
-app.use('/editors/register', registerRouter);
-app.use('/editors/auth', authRouter);
-app.use('/editors/protected', protectedRouter);
+app.use('/register', registerRouter);
+app.use('/auth', authRouter);
+app.use('/protected', protectedRouter);
+app.use('/content', contentRouter);
+
 
 app.use('*', function (req, res) {
   res.status(404).json({ message: 'Not Found' });
@@ -40,7 +43,7 @@ function runServer(databaseUrl, port = PORT) {
       if (err) {
         return reject(err);
       } else {
-        console.log('connected to', databaseUrl);
+        console.log('connected to mongoose', databaseUrl);
       }
       server = app.listen(port, () => {
         console.log(`Your app is listening on port ${port}`);
