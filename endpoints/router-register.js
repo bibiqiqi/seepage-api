@@ -9,7 +9,7 @@ const router = express.Router();
 const jsonParser = bodyParser.json();
 
 router.post('/', jsonParser, (req, res) => {
-  console.log('req.body is:', req.body);
+  //console.log('req.body is:', req.body);
 //verify that all required fields are there
   const requiredFields = ['email', 'password', 'firstName', 'lastName']
   const missingField = requiredFields.find(field => !(field in req.body));
@@ -23,7 +23,7 @@ router.post('/', jsonParser, (req, res) => {
       location: missingField
     })
   } else {
-    console.log('All required fields are there!');
+    //console.log('All required fields are there!');
   }
 
 //verify that all field inputs are of the right type
@@ -40,7 +40,7 @@ router.post('/', jsonParser, (req, res) => {
       location: nonStringField
     });
   } else {
-    console.log('All field inputs are of the right type!');
+    //console.log('All field inputs are of the right type!');
   }
 
 //verify that none of the fields that need to be explicitly trimmed
@@ -58,7 +58,7 @@ router.post('/', jsonParser, (req, res) => {
       location: nonTrimmedField
     })
   } else {
-    console.log('All the necessary fields are trimmed!');
+    //console.log('All the necessary fields are trimmed!');
   }
 
   //verify that fields with size requirements fit within those requirements
@@ -89,18 +89,18 @@ router.post('/', jsonParser, (req, res) => {
       location: tooSmallField || tooLargeField
     })
   } else {
-    console.log('All field inputs meet their size requirements!');
+    //console.log('All field inputs meet their size requirements!');
   }
 
 //trim the trimmable fields
-let {shortId, email, password, firstName, lastName} = req.body;
+let {email, password, firstName, lastName} = req.body;
 email = email.trim();
 firstName = firstName.trim();
 lastName = lastName.trim();
 return Editor.find({email})
   .count()
   .then(count => {
-    console.log('found', count);
+    //console.log('found', count);
     if (count > 0) {
       //then there is an existing editor in the DB with this Email
       return Promise.reject({
@@ -115,7 +115,6 @@ return Editor.find({email})
   })
   .then(hash => {
     return Editor.create({
-      shortId,
       email,
       password: hash,
       firstName,
@@ -131,12 +130,6 @@ return Editor.find({email})
     }
     res.status(500).json({code: 500, message: 'Internal server error'});
   });
-});
-
-router.get('/', (req, res) => {
-  return Editor.find()
-    .then(editors => res.json(editors.map(editor => editor.serialize())))
-    .catch(err => res.status(500).json({message: 'Internal server error'}));
 });
 
 module.exports = {router};

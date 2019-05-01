@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const EditorSchema = mongoose.Schema({
-  shortId: {type: String, require: true, unique: true},
   email: {type: String, required: true, unique: true},
   password: {type: String, required: true},
   firstName: {type: String, default: ''},
@@ -13,7 +12,6 @@ const EditorSchema = mongoose.Schema({
 EditorSchema.methods.serialize = function() {
   return {
     id: this._id,
-    shortId: this.shortId,
     email: this.email,
     firstName: this.firstName,
     lastName: this.lastName

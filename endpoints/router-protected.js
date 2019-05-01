@@ -8,6 +8,7 @@ const GridFsStorage = require('multer-gridfs-storage');
 const path = require('path');
 const crypto = require('crypto');
 const Grid = require('gridfs-stream');
+const util = require('util');
 
 const {DATABASE_URL} = require('../config');
 const {Content} = require('../models/content');
@@ -93,26 +94,48 @@ router.post('/files', jwtAuth, arrUpload, (req, res, next) => {
     });
 });
 
-router.patch('/content/:shortId', jwtAuth, (req, res) => {
+router.delete('/content/:contentId', jwtAuth, (req, res) => {
+  //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
+  Content
+  .findByIdAndRemove(req.params.contentId)
+  .then((deletedContent) => {
+    //console.log('the content that was deleted from Mongo is:', deletedContent);
+    gfs.files
+      .deleteMany({id: deletedContent.id})
+      .then((deletedFiles) => {
+        //console.log('the files that were deleted from Mongo are:', deletedFiles);
+        res.status(204).end();
+      })
+      .catch(err => {
+        console.error(err);
+        res.status(500).json({ error: 'Something went wrong' });
+      });
+  })
+  .catch(err => {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
+  })
+
+});
+
+router.patch('/content/:contentId', jwtAuth, (req, res) => {
   const updateObject = req.body;
-  console.log('req.body is:', req.body);
+  //console.log('updateObject is', updateObject);
   const updateableFields = ['artistName', 'title', 'uploadArt', 'category', 'tags' ];
   //if user sent a field that is not in the updateable fields array, then reject the request
-  req.body.forEach(field => {
-    if (!(field in updateableFields)) {
+  Object.keys(updateObject).forEach(field => {
+    if (!(updateableFields.includes(field))) {
+      //console.log(`This ${util.inspect(field, {showHidden: false, depth: null})} is not an updateable field`);
       const message = `This ${field} is not an updateable field`;
       return res.status(400).send(message);
     }
- });
- Content
-   .findOneAndUpdate({shortId : req.params.shortId }, updateObject, {'new': true})
+  });
+  Content
+    .findOneAndUpdate({id : req.params.id }, updateObject, {'new': true})
     .then(response => res.status(204).end())
     .catch(err => res.status(500).json({ message: 'Something went wrong' }));
 });
 
-router.delete('/', jwtAuth, (req, res) => {
-  return res.json({
-  });
-});
+
 
 module.exports = {router};

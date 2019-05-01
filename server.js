@@ -24,7 +24,6 @@ app.use(
 passport.use(localStrategy);
 passport.use(jwtStrategy);
 app.use(methodOverride('_method'));
-//app.use('/users', usersRouter);
 app.use('/register', registerRouter);
 app.use('/auth', authRouter);
 app.use('/protected', protectedRouter);
