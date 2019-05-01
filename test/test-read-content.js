@@ -61,14 +61,6 @@ function seedGfsFiles(insertedContent) {
 
 describe('Content endpoints', function () {
 
-  // before(function () {
-  //   return runServer(TEST_DATABASE_URL);
-  // });
-  //
-  // after(function () {
-  //  return closeServer();
-  // });
-
   beforeEach(function () {
     return seedFakeContent();
   });

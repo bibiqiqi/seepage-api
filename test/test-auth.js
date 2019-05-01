@@ -32,10 +32,6 @@ describe('/auth/login', function() {
     return runServer(TEST_DATABASE_URL);
   });
 
-  // after(function() {
-  //   return closeServer();
-  // });
-
   beforeEach(function () {
     return Editor.hashPassword(password).then(password => {
       Editor.create({

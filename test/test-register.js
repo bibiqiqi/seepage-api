@@ -60,11 +60,6 @@ describe('/editors', function(){
     });
   }
 
-  // before(function() {
-  //   console.log('running server');
-  //   return runServer(TEST_DATABASE_URL);
-  // });
-
    after(function() {
      return closeServer();
    });
