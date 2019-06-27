@@ -24,3 +24,7 @@ ContentSchema.methods.serialize = function() {
 const Content = mongoose.model('Content', ContentSchema);
 
 module.exports = {Content};
+
+
+//the id of each content is copied to the corresponding files in fs.files.metadata.contentId
+//so that when a user wants to see the actual file, they can pass the content's id to fetch it
