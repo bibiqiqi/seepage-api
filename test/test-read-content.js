@@ -42,8 +42,11 @@ function seedFakeContent() {
 };
 
 function seedGfsFiles(insertedContent) {
+  *//maps all the text info ("artist name", "title", "tags") that is inserted into database, and for each entry,
+  *//adds a "dummy art" file for that entry
+  *//currently, inserting 1 dummy file per entry works, but now i need to be able to insert multiple files per entry
+  *//commented out the Promise.all, so I can just get this working for 1 content entry first
   const filePaths = ['./dummyArt.jpg', './dummyArt2.jpg', './dummyArt3.jpg'];
-  //const readSource = H(filePaths);
   // return Promise.all(
    // insertedContent.map(function(content, i) {
    //   return new Promise(function(resolve,reject) {
@@ -58,6 +61,7 @@ function seedGfsFiles(insertedContent) {
        console.log(readStream);
        readStream.pipe(writeStream);
 
+       *//below are other methods attempts I've tried
        // H(filePaths)
        //  .map(fs.createReadStream)
        //  .flatMap(H)
