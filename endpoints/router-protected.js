@@ -3,95 +3,131 @@ const bodyParser = require('body-parser');
 const passport = require('passport');
 const mongoose = require('mongoose');
 const fs = require('fs');
-const multer = require('multer');
-const GridFsStorage = require('multer-gridfs-storage');
 const path = require('path');
 const crypto = require('crypto');
 const Grid = require('gridfs-stream');
 const util = require('util');
+const multiparty = require('multiparty')
+const sharp = require('sharp');
 
 const {DATABASE_URL} = require('../config');
 const {Content} = require('../models/content');
+const {validateFields} = require('./validators');
 
-//create storage engine
-const storage = new GridFsStorage({
-    url: DATABASE_URL,
-    file: (req, file) => {
-      return new Promise((resolve, reject) => {
-        crypto.randomBytes(16, (err, buf) => {
-          if (err) {
-            return reject(err);
-          }
-          const fileName = buf.toString('hex') + path.extname(file.originalname);
-          const fileInfo = {
-            filename: fileName,
-            bucketName: 'files',
-            metadata: {contentId: req.body.contentId}
-          }
-          resolve(fileInfo);
-        });
-      });
-    }
-});
-
+const router = express.Router();
+const jwtAuth = passport.authenticate('jwt', { session: false });
 //for gfs
 const mongoConn = mongoose.connection;
 let gfs;
-
 //define gfs stream
 mongoConn.once('open', () => {
   gfs = Grid(mongoConn.db, mongoose.mongo);
   gfs.collection('fs');
 })
 
-const upload = multer({storage});
-const arrUpload = upload.array('files');
-const router = express.Router();
-
 router.use(bodyParser.json({limit: '50mb', extended: true}));
 
-const jwtAuth = passport.authenticate('jwt', { session: false });
-
-router.post('/content', jwtAuth, (req, res) => {
-  //console.log('-req.body is', req.body);
-  const requiredFields = ['artistName', 'title', 'category', 'tags'];
-  for (let i = 0; i < requiredFields.length; i++) {
-    const field = requiredFields[i];
-    if (!(field in req.body)) {
-      const message = `Missing \`${field}\` in request body`;
-      console.error(message);
-      return res.status(400).send(message);
-    }
-  }
-  Content
-    .create({
-      artistName: req.body.artistName,
-      title: req.body.title,
-      category: req.body.category,
-      tags: req.body.tags
-    })
-    .then(content => res.status(201).json(content.serialize()))
-    .catch(err => {
-      console.error(err);
-      res.status(500).json({error: 'Something went wrong'});
-    })
-});
-
-router.post('/files', jwtAuth, arrUpload, (req, res, next) => {
-  //console.log(req.files);
-  const files = req.files;
-    if (!files) {
-      const error = new Error('Please upload files');
-      error.httpStatusCode = 400;
-      return next(error)
-    }
-  gfs.files
-    .insertMany(req.files)
-    .then(inserted => res.status(201).json(inserted))
-    .catch(err => {
-      console.error(err);
-      res.status(500).json({ error: 'Something went wrong' });
+//parse the multiform data into field and files,
+//upload fields to mongo and retrieve the Id
+//upload files to GridFs with the contentId attached
+router.post('/content', jwtAuth, (req, res ) => {
+  //parse text and files fields
+  const form = new multiparty.Form();
+  let filesArray;
+  return new Promise(function(resolve, reject) {
+    form.parse(req, function(err, fields, files) {
+      if(err){
+        console.log('theres an err', err);
+      }
+      console.log('parsed fields is', JSON.stringify(fields));
+      //console.log(util.inspect(fields, false, null, true))
+      console.log('parsed files is', files);
+      filesArray = files.files;
+      //console.log('filesArray is', filesArray);
+      resolve(fields);
     });
+  })
+  .then(fieldsObject => {
+    validateFields(fieldsObject)
+      .then(fields => {
+        //insert all the content except for the thumbnails into mongodb
+        console.log('inserting content document');
+        Content
+          .create({
+            artistName: fields.artistName,
+            title: fields.title,
+            category: fields.category,
+            tags: fields.tags
+            //thumbnails: fields.thumbnails
+          })
+          .then(insertedContent => {
+            //return the id for the content entry
+              console.log('content was inserted', insertedContent);
+              const contentId = insertedContent.id;
+              //map through the filesArray, resize the image, and save as a buffer in the thumbnail
+              // TODO: how will resize work if the file is non image file
+              return Promise.all(
+                filesArray.map((file) => {
+                  return new Promise(function(resolve, reject) {
+                    sharp(file.path)
+                      .resize(500, 500, {fit: 'cover'})
+                      .toFormat('jpg')
+                      .toBuffer({resolveWithObject: true})
+                      .then((buffer) => {
+                        console.log('updating document with contentId', contentId);
+                        Content.
+                          findByIdAndUpdate(contentId, {$push: {thumbnails: buffer}}, {new: true}, (error, doc) => {
+                            if (error) {
+                              console.log('error is', error);
+                            }
+                            console.log('modified doc is');
+                            resolve(doc)
+                          })
+                      })
+                    .catch(err => {console.log('there was an error when using sharp for this img', err)})
+                  })
+                })
+              )
+              .then(modified => {
+                console.log(modified, 'were modified')
+                //upload all files to GridFs with the associated content id
+                return Promise.all(
+                 filesArray.map(function(file, i) {
+                   return new Promise(function(resolve, reject) {
+                     crypto.randomBytes(16, (err, buf) => {
+                       if (err) {
+                         return reject();
+                       }
+                       const fileName = buf.toString('hex') + path.extname(file.originalFilename);
+                       const fileInfo = {
+                         filename: fileName,
+                         metadata: {contentId: contentId}
+                       }
+                       resolve(fileInfo);
+                     })
+                   })
+                   .then(fileInfo => {
+                     return new Promise(function(resolve,reject) {
+                       const writestream = gfs.createWriteStream(fileInfo);
+                       fs.createReadStream(file.path).pipe(writestream);
+                       writestream.on("error",reject);
+                       writestream.on("close", function(uploadedFile) {
+                        console.log(`file ${i} was uploaded`);
+                        resolve(uploadedFile);
+                       });
+                    })
+                   })
+                 })
+               )
+             })
+             .then(res.status(200).end())
+             .catch(err => {
+               console.error(err);
+               res.status(500).json({error: 'Something went wrong'});
+             })
+          })
+      })
+   })
 });
 
 router.delete('/content/:contentId', jwtAuth, (req, res) => {

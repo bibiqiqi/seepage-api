@@ -83,16 +83,16 @@ describe('Protected endpoint', function () {
     tags: ['hyper-real', 'reality tv', 'new media', 'conceptual art']
   }
 
-  beforeEach(function () {
-    return Editor.hashPassword(password).then(password => {
-      Editor.create({
-        email,
-        password,
-        firstName,
-        lastName
-      })
-    });
-  });
+  // beforeEach(function () {
+  //   return Editor.hashPassword(password).then(password => {
+  //     Editor.create({
+  //       email,
+  //       password,
+  //       firstName,
+  //       lastName
+  //     })
+  //   });
+  // });
 
   beforeEach(function () {
     return seedFakeContent()
@@ -107,14 +107,14 @@ describe('Protected endpoint', function () {
       });
   });
 
-  afterEach(function () {
-    return new Promise((resolve, reject) => {
-      console.warn('Deleting database');
-      mongoose.connection.dropDatabase()
-        .then(result => resolve(result))
-        .catch(err => reject(err));
-    });
-  });
+  // afterEach(function () {
+  //   return new Promise((resolve, reject) => {
+  //     console.warn('Deleting database');
+  //     mongoose.connection.dropDatabase()
+  //       .then(result => resolve(result))
+  //       .catch(err => reject(err));
+  //   });
+  // });
 
   describe('/protected/content', function () {
     describe('POST', function () {
