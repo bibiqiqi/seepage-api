@@ -5,7 +5,6 @@ const chaiHttp = require('chai-http');
 const mongoose = require('mongoose');
 const Grid = require('gridfs-stream');
 const fs = require('fs');
-const H = require('highland');
 
 const {DATABASE_URL} = require('../config');
 const { app, runServer, closeServer, upload } = require('../server');
@@ -42,42 +41,55 @@ function seedFakeContent() {
 };
 
 function seedGfsFiles(insertedContent) {
-  *//maps all the text info ("artist name", "title", "tags") that is inserted into database, and for each entry,
-  *//adds a "dummy art" file for that entry
-  *//currently, inserting 1 dummy file per entry works, but now i need to be able to insert multiple files per entry
-  *//commented out the Promise.all, so I can just get this working for 1 content entry first
-  const filePaths = ['./dummyArt.jpg', './dummyArt2.jpg', './dummyArt3.jpg'];
-  // return Promise.all(
-   // insertedContent.map(function(content, i) {
-   //   return new Promise(function(resolve,reject) {
-       // const writeStream = gfs.createWriteStream({
-       //   metadata: {contentId: content.id}
-       // });
-       const writeStream = gfs.createWriteStream({
-         metadata: {contentId: insertedContent[0].id}
-       });
-       const readFile = H.wrapCallback(fs.readFile);
-       const readStream = H(filePaths).map(readFile).flatMap(H);
-       console.log(readStream);
-       readStream.pipe(writeStream);
+  //maps all the text info ("artist name", "title", "tags") that is inserted into database, and for each entry,
+  //adds a "dummy art" file for that entry
+  //currently, inserting 1 dummy file per entry works, but now i need to be able to insert multiple files per entry
+  //commented out the Promise.all, so I can just get this working for 1 content entry first
+  //const filePaths = ['./dummyArt.jpg', './dummyArt2.jpg', './dummyArt3.jpg'];
+//   return Promise.all(
+//    insertedContent.map(function(content, i) {
+//      return new Promise(function(resolve,reject) {
+//         let x;
+//         for (x = 0; x < filePaths; x++) {
+//           const writeStream = gfs.createWriteStream({
+//             metadata: {contentId: content.id}
+//           });
+//           fs.createReadStream(filePaths[x]).pipe(writestream);
+//           writestream.on("error",reject);
+//           writestream.on("close", function(uploadedFile) {
+//            console.log(`file ${x} was uploaded`);
+//            resolve(uploadedFile);
+//           });
+//         }
+//      })
+//    })
+//  )
+// }
 
-       *//below are other methods attempts I've tried
-       // H(filePaths)
-       //  .map(fs.createReadStream)
-       //  .flatMap(H)
-       //  .pipe(writeStream);
-        //writeStream.on('error', () => console.log('there was an error'));
-        //writeStream.on('close', () => console.log('success'));
+const filePaths = ['./dummyArt.jpg', './dummyArt2.jpg', './dummyArt3.jpg'];
 
-       // const readFile = H.wrapCallback(fs.readFile);
-       // readSource.fork().map(readFile).toNodeStream().pipe(writeStream);
-       // writeStream.on("error",reject);
-       // writeStream.on("close", function(uploadedFile) {
-       //  resolve(uploadedFile);
-       // });
-     // })
-   // })
- // )
+ return Promise.all(
+   insertedContent.map(function(content, i) {
+     return new Promise(function(resolve,reject) {
+       for (const [j, item] of filePaths.entries()) {
+         let writestreams = [];
+         writestreams[j] = gfs.createWriteStream({
+           metadata: {
+             contentId: content.id,
+             mediaType: 'image'
+           }
+         });
+
+         fs.createReadStream(filePaths[j]).pipe(writestreams[j]);
+         writestreams[j].on("error", reject);
+         writestreams[j].on("close", function(uploadedFile) {
+           console.log(`ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ file ${j} of artist ${i} was uploaded`);
+           resolve(uploadedFile);
+         });
+       }
+     })
+   })
+ )
 }
 
 describe('Content endpoints', function () {
@@ -162,7 +174,7 @@ describe('Content endpoints', function () {
               //console.log('seeded fake content and this is what was inserted:', insertedContent);
               return seedGfsFiles(insertedContent)
             }).then(function(uploadedFiles) {
-              console.log('uploaded corresponding files and this is what was inserted:', uploadedFiles);
+              //console.log('uploaded corresponding files and this is what was inserted:', uploadedFiles);
               //console.log('gfs is:', gfs);
             return gfs.files
             .findOne()

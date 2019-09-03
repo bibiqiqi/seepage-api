@@ -7,7 +7,7 @@ const config = require('../config');
 const router = express.Router();
 
 const createAuthToken = user => {
-  //console.log('-user passed to createAuthToken() is:', user);
+  console.log('-user passed to createAuthToken() is:', user);
   return jwt.sign({user}, config.JWT_SECRET, {
     subject: user.email,
     expiresIn: config.JWT_EXPIRY,
@@ -20,9 +20,9 @@ const localAuth = passport.authenticate('local', {session: false});
 router.use(bodyParser.json());
 
 router.post('/login', localAuth, (req, res) => {
-  //console.log('-req.body sent to /auth/login is', req.body);
+  console.log('-req.body sent to /auth/login is', req.body);
   const authToken = createAuthToken(req.user.serialize());
-  //console.log('-server is sending this authToken back to client:', authToken);
+  console.log('-server is sending this authToken back to client:', authToken);
   res.json({authToken});
 });
 
