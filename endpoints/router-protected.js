@@ -9,6 +9,7 @@ const Grid = require('gridfs-stream');
 const util = require('util');
 const multiparty = require('multiparty')
 const sharp = require('sharp');
+const Binary = require('mongodb').Binary;
 
 const {DATABASE_URL} = require('../config');
 const {Content} = require('../models/content');
@@ -39,10 +40,15 @@ router.post('/content', jwtAuth, (req, res ) => {
       if(err){
         console.log('theres an err', err);
       }
-      console.log('parsed fields is', JSON.stringify(fields));
-      //console.log(util.inspect(fields, false, null, true))
-      console.log('parsed files is', files);
-      filesArray = files.files;
+      //console.log('parsed fields is', JSON.stringify(fields));
+      console.log('parsed fields is', util.inspect(fields, false, null, true));
+      //console.log('title is a', typeof(fields.title[0]));
+      //console.log('artistName is a', typeof(fields.artistName[0]));
+      //console.log('parsed files is', files);
+      filesArray = files.files.map((e, i) => {
+        e.key = i;
+        return e;
+      })
       //console.log('filesArray is', filesArray);
       resolve(fields);
     });
@@ -51,45 +57,66 @@ router.post('/content', jwtAuth, (req, res ) => {
     validateFields(fieldsObject)
       .then(fields => {
         //insert all the content except for the thumbnails into mongodb
-        console.log('inserting content document');
+        //console.log('inserting content document');
         Content
           .create({
-            artistName: fields.artistName,
-            title: fields.title,
+            artistName: fields.artistName[0],
+            title: fields.title[0],
             category: fields.category,
             tags: fields.tags
             //thumbnails: fields.thumbnails
           })
           .then(insertedContent => {
             //return the id for the content entry
-              console.log('content was inserted', insertedContent);
+              //console.log('content was inserted', insertedContent);
               const contentId = insertedContent.id;
+              const i = 1;
               //map through the filesArray, resize the image, and save as a buffer in the thumbnail
               // TODO: how will resize work if the file is non image file
               return Promise.all(
-                filesArray.map((file) => {
+                filesArray.map((file, x) => {
                   return new Promise(function(resolve, reject) {
                     sharp(file.path)
                       .resize(500, 500, {fit: 'cover'})
                       .toFormat('jpg')
                       .toBuffer({resolveWithObject: true})
-                      .then((buffer) => {
-                        console.log('updating document with contentId', contentId);
+                      .then((thumbNailBuffer) => {
+                        //console.log(thumbNailBuffer);
+                        //console.log(thumbNailBuffer.toString('utf8'));
+                        console.log('file is', file);
+                        //replace all spaces in artistName and title with _
+                        const artistName = insertedContent.artistName.replace(/ /g, '_');
+                        const title = insertedContent.title.replace(/ /g, '_');
+                        const fileName = `${artistName}_${title}_tn${i}`;
+                        console.log('fileName is a', typeof(fileName));
+                        console.log('thumbNailBuffer is a', typeof(thumbNailBuffer.data));
                         Content.
-                          findByIdAndUpdate(contentId, {$push: {thumbnails: buffer}}, {new: true}, (error, doc) => {
+                          findByIdAndUpdate(contentId,
+                            {$push: {
+                              thumbNails: {
+                                contentId: contentId,
+                                fileName: fileName,
+                                data: Binary(thumbNailBuffer.data),
+                                key: file.key
+                                }
+                              }
+                            },
+                            {'new': true}, (error, doc) => {
                             if (error) {
                               console.log('error is', error);
                             }
-                            console.log('modified doc is');
+                            //console.log('modified doc is');
                             resolve(doc)
                           })
                       })
                     .catch(err => {console.log('there was an error when using sharp for this img', err)})
                   })
+                  i++;
+                  console.log('i++', i);
                 })
               )
               .then(modified => {
-                console.log(modified, 'were modified')
+                //console.log(modified, 'were modified')
                 //upload all files to GridFs with the associated content id
                 return Promise.all(
                  filesArray.map(function(file, i) {
@@ -98,10 +125,14 @@ router.post('/content', jwtAuth, (req, res ) => {
                        if (err) {
                          return reject();
                        }
-                       const fileName = buf.toString('hex') + path.extname(file.originalFilename);
+                       //const fileName = buf.toString('hex') + path.extname(file.originalFilename);
+                       const fileName = `${insertedContent.artistName}_${insertedContent.title}_${i}`;
                        const fileInfo = {
                          filename: fileName,
-                         metadata: {contentId: contentId}
+                         metadata: {
+                           contentId: contentId,
+                           key: file.key
+                         }
                        }
                        resolve(fileInfo);
                      })
@@ -112,7 +143,7 @@ router.post('/content', jwtAuth, (req, res ) => {
                        fs.createReadStream(file.path).pipe(writestream);
                        writestream.on("error",reject);
                        writestream.on("close", function(uploadedFile) {
-                        console.log(`file ${i} was uploaded`);
+                        //console.log(`file ${i} was uploaded`);
                         resolve(uploadedFile);
                        });
                     })
