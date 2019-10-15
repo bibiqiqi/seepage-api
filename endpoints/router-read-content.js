@@ -23,7 +23,6 @@ mongoConn.once('open', () => {
 
 router.use(bodyParser.json());
 
-
 router.get('/', (req, res) => {
   Content
     .find()
@@ -41,11 +40,12 @@ router.get('/', (req, res) => {
 //mediaTypes:
 //image, video, audio, text
 router.get('/thumbnails/:contentId', (req, res) => {
+  console.log('contentId sent to this endpoint is', req.params.contentId)
   Content
     .findById(req.params.contentId)
     .select('thumbNails')
     .then(thumbNails => {
-      //console.log(thumbNails);
+      console.log('sending back these thumbNails', thumbNails);
       res.contentType('json');
       res.send(thumbNails);
     })
@@ -55,7 +55,7 @@ router.get('/thumbnails/:contentId', (req, res) => {
     });
 });
 
-router.get('/files/:contentId/:key', (req, res) => {
+router.get('/files/:contentId/:objectId', (req, res) => {
   const key = parseInt(req.params.key);
   console.log('req.params.contentId is', req.params.contentId);
   console.log('key is', key, 'and the type is: ', typeof key);
