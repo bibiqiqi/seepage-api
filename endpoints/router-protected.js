@@ -40,21 +40,14 @@ router.post('/content', jwtAuth, (req, res ) => {
       if(err){
         console.log('theres an err', err);
       }
-      //console.log('parsed fields is', JSON.stringify(fields));
-      console.log('parsed fields is', util.inspect(fields, false, null, true));
-      //console.log('title is a', typeof(fields.title[0]));
-      //console.log('artistName is a', typeof(fields.artistName[0]));
       //console.log('parsed files is', files);
-      filesArray = files.files.map((e, i) => {
-        e.key = i;
-        return e;
-      })
-      //console.log('filesArray is', filesArray);
+      filesArray = files.files;
+      console.log('filesArray is', filesArray);
       resolve(fields);
     });
   })
   .then(fieldsObject => {
-    validateFields(fieldsObject)
+      validateFields(fieldsObject)
       .then(fields => {
         //insert all the content except for the thumbnails into mongodb
         //console.log('inserting content document');
@@ -161,6 +154,159 @@ router.post('/content', jwtAuth, (req, res ) => {
    })
 });
 
+router.patch('/content/:contentId', jwtAuth, (req, res) => {
+  console.log('reached the patch endpoint!');
+  //patch only accepts 1 field to edit at a time
+  const contentId = req.params.contentId;
+  const form = new multiparty.Form();
+  let filesArray;
+  //1. return a promise of the parsed fields and files
+  return new Promise(function(resolve, reject) {
+    form.parse(req, function(err, fields, files) {
+      if(err){
+        console.log('theres an err', err);
+      }
+      console.log('parsed fields is', fields);
+      filesArray = files.files;
+      console.log('filesArray is', filesArray);
+      resolve(fields);
+    });
+  }).then(fields => {
+    ////if fields is defined AND there is no files value in fields, then just update the corresponding document and return a response
+    if ((fields) && (!('files' in fields))) {
+      console.log('just updating the fields with Mongoose');
+      Content
+        .findByIdAndUpdate(
+          contentId,
+          fields,
+          {new: true}
+        )
+        .then(updated => {
+          console.log('successfully updated the following:', updated);
+          res.status(200).end();
+        })
+        .catch(err => {
+        console.error(err);
+        res.status(500).json({error: 'Something went wrong'});
+        })
+    } else if (('files' in fields) || (filesArray)) {//otherwise if either fields is defined or files is in fields, the user is updating the files for this entry
+      if ('files' in fields) { //if there's a files key in the fields object, the user is removing a file in the db
+        const removeFiles = fields.files;
+        //content.thumbNails.id({$in: (removeFiles).map(mongoose.Types.ObjectId)}).remove()
+        Content.findByIdAndUpdate(
+          contentId,
+          {$pull: { thumbNails: {_id: {$in: (removeFiles).map(mongoose.Types.ObjectId)}}}},
+          {new: true},
+          (err, doc) => {
+            if (err){
+              console.log('error is', err);
+            } console.log(doc);
+          }
+        )
+        .then(modifiedDoc => {
+          console.log('returning the doc from removing subdocuments', modifiedDoc);
+            //then map through removeFiles and remove the corresponging files with from gridFs
+           gfs.files
+             .remove({id: {$in: (removeFiles).map(mongoose.Types.ObjectId)}})
+             .then((deletedFiles) => {
+               console.log('the files that were deleted from gridFs are:', deletedFiles);
+               res.status(200).end();
+             })
+           })
+         .catch(err => {
+         console.error(err);
+         res.status(500).json({error: 'Something went wrong'});
+         })
+       }
+       if (filesArray) {
+         Content.findById(contentId)
+          .then(doc => {
+            const i = 1;
+            //map through the filesArray, resize the image, and save as a buffer in the thumbnail subdoc
+            return Promise.all(
+              filesArray.map((file, x) => {
+                return new Promise(function(resolve, reject) {
+                  sharp(file.path)
+                    .resize(500, 500, {fit: 'cover'})
+                    .toFormat('jpg')
+                    .toBuffer({resolveWithObject: true})
+                    .then((thumbNailBuffer) => {
+                      const artistName = doc.artistName.replace(/ /g, '_');
+                      const title = doc.title.replace(/ /g, '_');
+                      const fileName = `${artistName}_${title}_tn${i}`;
+                      //console.log('fileName is a', typeof(fileName));
+                      //console.log('thumbNailBuffer is a', typeof(thumbNailBuffer.data));
+                      Content.
+                        findByIdAndUpdate(contentId,
+                          {$push: {
+                            thumbNails: {
+                              contentId: contentId,
+                              fileName: fileName,
+                              data: Binary(thumbNailBuffer.data),
+                              key: file.key
+                              }
+                            }
+                          },
+                          {'new': true},
+                          (error, doc) => {
+                          if (error) {
+                            console.log('error is', error);
+                          }
+                          //console.log('modified doc is', doc);
+                          resolve(doc)
+                        })
+                    })
+                  .catch(err => {console.log('there was an error when using sharp for this img', err)})
+                })
+                i++;
+                console.log('i++', i);
+              })
+            )
+            .then(modified => {
+              console.log('added thumbnails to these docs', modified)
+              //upload all files to GridFs with the associated content id
+              return Promise.all(
+               filesArray.map(function(file, i) {
+                 return new Promise(function(resolve, reject) {
+                   crypto.randomBytes(16, (err, buf) => {
+                     if (err) {
+                       return reject();
+                     }
+                     const fileName = `${doc.artistName}_${doc.title}_${i}`;
+                     const fileInfo = {
+                       filename: fileName,
+                       metadata: {
+                         contentId: contentId,
+                         key: file.key
+                       }
+                     }
+                     resolve(fileInfo);
+                   })
+                 })
+                 .then(fileInfo => {
+                   return new Promise(function(resolve,reject) {
+                     const writestream = gfs.createWriteStream(fileInfo);
+                     fs.createReadStream(file.path).pipe(writestream);
+                     writestream.on("error",reject);
+                     writestream.on("close", function(uploadedFile) {
+                      resolve(uploadedFile);
+                     });
+                  })
+                 })
+               })
+             )
+           })
+          })
+        .then(res.status(200).end())
+        .catch(err => {
+          console.error(err);
+          res.status(500).json({error: 'Something went wrong'});
+        })
+       }
+     }
+  })
+});
+
 router.delete('/content/:contentId', jwtAuth, (req, res) => {
   //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
   Content
@@ -183,24 +329,6 @@ router.delete('/content/:contentId', jwtAuth, (req, res) => {
     res.status(500).json({ error: 'Something went wrong' });
   })
 
-});
-
-router.patch('/content/:contentId', jwtAuth, (req, res) => {
-  const updateObject = req.body;
-  //console.log('updateObject is', updateObject);
-  const updateableFields = ['artistName', 'title', 'uploadArt', 'category', 'tags' ];
-  //if user sent a field that is not in the updateable fields array, then reject the request
-  Object.keys(updateObject).forEach(field => {
-    if (!(updateableFields.includes(field))) {
-      //console.log(`This ${util.inspect(field, {showHidden: false, depth: null})} is not an updateable field`);
-      const message = `This ${field} is not an updateable field`;
-      return res.status(400).send(message);
-    }
-  });
-  Content
-    .findOneAndUpdate({id : req.params.id }, updateObject, {'new': true})
-    .then(response => res.status(204).end())
-    .catch(err => res.status(500).json({ message: 'Something went wrong' }));
 });
 
 
