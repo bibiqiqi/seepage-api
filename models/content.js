@@ -7,7 +7,6 @@ mongoose.Promise = global.Promise;
 const ThumbNailSchema = mongoose.Schema({
   contentId: {type: String, require: true},
   fileName: {type: String, require: true},
-  key: {type: Number, require: true},
   data: {type: Buffer, require: true}
 });
 
@@ -24,7 +23,6 @@ ThumbNailSchema.methods.serialize = function() {
     id: this._id,
     contentId: this.contentId,
     fileName: this.fileName,
-    key: this.key,
     data: this.data,
   }
 }
