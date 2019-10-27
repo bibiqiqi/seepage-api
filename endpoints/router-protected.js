@@ -42,7 +42,7 @@ router.post('/content', jwtAuth, (req, res ) => {
       }
       //console.log('parsed files is', files);
       filesArray = files.files;
-      console.log('filesArray is', filesArray);
+      //console.log('filesArray is', filesArray);
       resolve(fields);
     });
   })
@@ -63,11 +63,10 @@ router.post('/content', jwtAuth, (req, res ) => {
             //return the id for the content entry
               //console.log('content was inserted', insertedContent);
               const contentId = insertedContent.id;
-              const i = 1;
               //map through the filesArray, resize the image, and save as a buffer in the thumbnail
               // TODO: how will resize work if the file is non image file
               return Promise.all(
-                filesArray.map((file, x) => {
+                filesArray.map((file, i) => {
                   return new Promise(function(resolve, reject) {
                     sharp(file.path)
                       .resize(500, 500, {fit: 'cover'})
@@ -76,13 +75,13 @@ router.post('/content', jwtAuth, (req, res ) => {
                       .then((thumbNailBuffer) => {
                         //console.log(thumbNailBuffer);
                         //console.log(thumbNailBuffer.toString('utf8'));
-                        console.log('file is', file);
+                        //console.log('file is', file);
                         //replace all spaces in artistName and title with _
                         const artistName = insertedContent.artistName.replace(/ /g, '_');
                         const title = insertedContent.title.replace(/ /g, '_');
                         const fileName = `${artistName}_${title}_tn${i}`;
-                        console.log('fileName is a', typeof(fileName));
-                        console.log('thumbNailBuffer is a', typeof(thumbNailBuffer.data));
+                        //console.log('fileName is a', typeof(fileName));
+                        //console.log('thumbNailBuffer is a', typeof(thumbNailBuffer.data));
                         Content.
                           findByIdAndUpdate(contentId,
                             {$push: {
@@ -90,7 +89,6 @@ router.post('/content', jwtAuth, (req, res ) => {
                                 contentId: contentId,
                                 fileName: fileName,
                                 data: Binary(thumbNailBuffer.data),
-                                key: file.key
                                 }
                               }
                             },
@@ -104,12 +102,11 @@ router.post('/content', jwtAuth, (req, res ) => {
                       })
                     .catch(err => {console.log('there was an error when using sharp for this img', err)})
                   })
-                  i++;
-                  console.log('i++', i);
                 })
               )
               .then(modified => {
-                //console.log(modified, 'were modified')
+                const insertedThumbNails = modified[modified.length-1].thumbNails;
+                console.log("insertedThumNails are", insertedThumbNails);
                 //upload all files to GridFs with the associated content id
                 return Promise.all(
                  filesArray.map(function(file, i) {
@@ -124,7 +121,7 @@ router.post('/content', jwtAuth, (req, res ) => {
                          filename: fileName,
                          metadata: {
                            contentId: contentId,
-                           key: file.key
+                           thumbNailId: insertedThumbNails[i].id
                          }
                        }
                        resolve(fileInfo);
@@ -136,7 +133,6 @@ router.post('/content', jwtAuth, (req, res ) => {
                        fs.createReadStream(file.path).pipe(writestream);
                        writestream.on("error",reject);
                        writestream.on("close", function(uploadedFile) {
-                        //console.log(`file ${i} was uploaded`);
                         resolve(uploadedFile);
                        });
                     })
@@ -154,10 +150,30 @@ router.post('/content', jwtAuth, (req, res ) => {
    })
 });
 
+
 router.patch('/content/:contentId', jwtAuth, (req, res) => {
   console.log('reached the patch endpoint!');
   //patch only accepts 1 field to edit at a time
   const contentId = req.params.contentId;
+  console.log(req.body);
+  Content
+    .findByIdAndUpdate(
+      contentId,
+      req.body,
+      {new: true}
+    )
+    .then(updated => {
+      //console.log('successfully updated the following:', updated);
+      res.json(updated.serialize())
+      //res.status(200).end();
+    })
+    .catch(err => {
+    console.error(err);
+    res.status(500).json({error: 'Something went wrong'});
+    })
+})
+
+router.patch('/files/:contentId', jwtAuth, (req, res) => {
   const form = new multiparty.Form();
   let filesArray;
   //1. return a promise of the parsed fields and files
@@ -168,144 +184,125 @@ router.patch('/content/:contentId', jwtAuth, (req, res) => {
       }
       console.log('parsed fields is', fields);
       filesArray = files.files;
-      console.log('filesArray is', filesArray);
+      //console.log('filesArray is', filesArray);
       resolve(fields);
     });
-  }).then(fields => {
-    ////if fields is defined AND there is no files value in fields, then just update the corresponding document and return a response
-    if ((fields) && (!('files' in fields))) {
-      console.log('just updating the fields with Mongoose');
-      Content
-        .findByIdAndUpdate(
-          contentId,
-          fields,
-          {new: true}
+  })
+  if (fields) { //if there's a files key in the fields object, the user is removing a file in the db
+    const removeFiles = fields.files;
+    //content.thumbNails.id({$in: (removeFiles).map(mongoose.Types.ObjectId)}).remove()
+    Content.findByIdAndUpdate(
+      contentId,
+      {$pull: { thumbNails: {_id: {$in: (removeFiles).map(mongoose.Types.ObjectId)}}}},
+      {new: true},
+      (err, doc) => {
+        if (err){
+          console.log('error is', err);
+        } console.log(doc);
+      }
+    )
+    .then(modifiedDoc => {
+      console.log('returning the doc from removing subdocuments', modifiedDoc);
+        //then map through removeFiles and remove the corresponging files with from gridFs
+       gfs.files
+         .remove({id: {$in: (removeFiles).map(mongoose.Types.ObjectId)}})
+         .then((deletedFiles) => {
+           console.log('the files that were deleted from gridFs are:', deletedFiles);
+           res.status(200).end();
+         })
+       })
+     .catch(err => {
+     console.error(err);
+     res.status(500).json({error: 'Something went wrong'});
+     })
+   }
+   if (filesArray) { //if there's a filesArray, the user is adding files to the database
+     Content.findById(contentId)
+      .then(doc => {
+        const i = 1;
+        //map through the filesArray, resize the image, and save as a buffer in the thumbnail subdoc
+        return Promise.all(
+          filesArray.map((file, x) => {
+            return new Promise(function(resolve, reject) {
+              sharp(file.path)
+                .resize(500, 500, {fit: 'cover'})
+                .toFormat('jpg')
+                .toBuffer({resolveWithObject: true})
+                .then((thumbNailBuffer) => {
+                  const artistName = doc.artistName.replace(/ /g, '_');
+                  const title = doc.title.replace(/ /g, '_');
+                  const fileName = `${artistName}_${title}_tn${i}`;
+                  //console.log('fileName is a', typeof(fileName));
+                  //console.log('thumbNailBuffer is a', typeof(thumbNailBuffer.data));
+                  Content.
+                    findByIdAndUpdate(contentId,
+                      {$push: {
+                        thumbNails: {
+                          contentId: contentId,
+                          fileName: fileName,
+                          data: Binary(thumbNailBuffer.data),
+                          }
+                        }
+                      },
+                      {'new': true},
+                      (error, doc) => {
+                      if (error) {
+                        console.log('error is', error);
+                      }
+                      //console.log('modified doc is', doc);
+                      resolve(doc)
+                    })
+                })
+              .catch(err => {console.log('there was an error when using sharp for this img', err)})
+            })
+            i++;
+            console.log('i++', i);
+          })
         )
-        .then(updated => {
-          console.log('successfully updated the following:', updated);
-          res.status(200).end();
-        })
-        .catch(err => {
-        console.error(err);
-        res.status(500).json({error: 'Something went wrong'});
-        })
-    } else if (('files' in fields) || (filesArray)) {//otherwise if either fields is defined or files is in fields, the user is updating the files for this entry
-      if ('files' in fields) { //if there's a files key in the fields object, the user is removing a file in the db
-        const removeFiles = fields.files;
-        //content.thumbNails.id({$in: (removeFiles).map(mongoose.Types.ObjectId)}).remove()
-        Content.findByIdAndUpdate(
-          contentId,
-          {$pull: { thumbNails: {_id: {$in: (removeFiles).map(mongoose.Types.ObjectId)}}}},
-          {new: true},
-          (err, doc) => {
-            if (err){
-              console.log('error is', err);
-            } console.log(doc);
-          }
-        )
-        .then(modifiedDoc => {
-          console.log('returning the doc from removing subdocuments', modifiedDoc);
-            //then map through removeFiles and remove the corresponging files with from gridFs
-           gfs.files
-             .remove({id: {$in: (removeFiles).map(mongoose.Types.ObjectId)}})
-             .then((deletedFiles) => {
-               console.log('the files that were deleted from gridFs are:', deletedFiles);
-               res.status(200).end();
+        .then(modified => {
+          const insertedThumbNails = modified[modified.length-1].thumbNails;
+          console.log("insertedThumNails are", insertedThumbNails);
+          //upload all files to GridFs with the associated content id
+          return Promise.all(
+           filesArray.map(function(file, i) {
+             return new Promise(function(resolve, reject) {
+               crypto.randomBytes(16, (err, buf) => {
+                 if (err) {
+                   return reject();
+                 }
+                 const fileName = `${doc.artistName}_${doc.title}_${i}`;
+                 const fileInfo = {
+                   filename: fileName,
+                   metadata: {
+                     contentId: contentId,
+                     thumbNailId: insertedThumbNails[i].id
+                   }
+                 }
+                 resolve(fileInfo);
+               })
+             })
+             .then(fileInfo => {
+               return new Promise(function(resolve,reject) {
+                 const writestream = gfs.createWriteStream(fileInfo);
+                 fs.createReadStream(file.path).pipe(writestream);
+                 writestream.on("error",reject);
+                 writestream.on("close", function(uploadedFile) {
+                  resolve(uploadedFile);
+                 });
+              })
              })
            })
-         .catch(err => {
-         console.error(err);
-         res.status(500).json({error: 'Something went wrong'});
-         })
-       }
-       if (filesArray) {
-         Content.findById(contentId)
-          .then(doc => {
-            const i = 1;
-            //map through the filesArray, resize the image, and save as a buffer in the thumbnail subdoc
-            return Promise.all(
-              filesArray.map((file, x) => {
-                return new Promise(function(resolve, reject) {
-                  sharp(file.path)
-                    .resize(500, 500, {fit: 'cover'})
-                    .toFormat('jpg')
-                    .toBuffer({resolveWithObject: true})
-                    .then((thumbNailBuffer) => {
-                      const artistName = doc.artistName.replace(/ /g, '_');
-                      const title = doc.title.replace(/ /g, '_');
-                      const fileName = `${artistName}_${title}_tn${i}`;
-                      //console.log('fileName is a', typeof(fileName));
-                      //console.log('thumbNailBuffer is a', typeof(thumbNailBuffer.data));
-                      Content.
-                        findByIdAndUpdate(contentId,
-                          {$push: {
-                            thumbNails: {
-                              contentId: contentId,
-                              fileName: fileName,
-                              data: Binary(thumbNailBuffer.data),
-                              key: file.key
-                              }
-                            }
-                          },
-                          {'new': true},
-                          (error, doc) => {
-                          if (error) {
-                            console.log('error is', error);
-                          }
-                          //console.log('modified doc is', doc);
-                          resolve(doc)
-                        })
-                    })
-                  .catch(err => {console.log('there was an error when using sharp for this img', err)})
-                })
-                i++;
-                console.log('i++', i);
-              })
-            )
-            .then(modified => {
-              console.log('added thumbnails to these docs', modified)
-              //upload all files to GridFs with the associated content id
-              return Promise.all(
-               filesArray.map(function(file, i) {
-                 return new Promise(function(resolve, reject) {
-                   crypto.randomBytes(16, (err, buf) => {
-                     if (err) {
-                       return reject();
-                     }
-                     const fileName = `${doc.artistName}_${doc.title}_${i}`;
-                     const fileInfo = {
-                       filename: fileName,
-                       metadata: {
-                         contentId: contentId,
-                         key: file.key
-                       }
-                     }
-                     resolve(fileInfo);
-                   })
-                 })
-                 .then(fileInfo => {
-                   return new Promise(function(resolve,reject) {
-                     const writestream = gfs.createWriteStream(fileInfo);
-                     fs.createReadStream(file.path).pipe(writestream);
-                     writestream.on("error",reject);
-                     writestream.on("close", function(uploadedFile) {
-                      resolve(uploadedFile);
-                     });
-                  })
-                 })
-               })
-             )
-           })
-          })
-        .then(res.status(200).end())
-        .catch(err => {
-          console.error(err);
-          res.status(500).json({error: 'Something went wrong'});
-        })
-       }
-     }
-  })
+         )
+       })
+      })
+    .then(res.status(200).end())
+    .catch(err => {
+      console.error(err);
+      res.status(500).json({error: 'Something went wrong'});
+    })
+   }
 });
+
 
 router.delete('/content/:contentId', jwtAuth, (req, res) => {
   //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
