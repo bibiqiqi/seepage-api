@@ -56,7 +56,7 @@ router.get('/thumbnails/:contentId', (req, res) => {
 });
 
 router.get('/files/:thumbNailId', (req, res) => {
-  console.log('req.params.fileId is', req.params.thumbNailId);
+  console.log('req.params.thumbNailId is', req.params.thumbNailId);
   gfs.files.findOne({'metadata.thumbNailId': req.params.thumbNailId}, function(err, file) {
       if (err) {
         console.log(err);
@@ -69,8 +69,7 @@ router.get('/files/:thumbNailId', (req, res) => {
           err: 'file doesnt exist'
         });
       }
-      console.log(file);
-      console.log('id is:', file._id)
+      console.log('file was found', file);
       gfs.createReadStream({_id: file._id}).pipe(res);
     }
   )
