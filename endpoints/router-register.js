@@ -23,8 +23,6 @@ router.post('/', jsonParser, (req, res) => {
       message: 'Missing Field',
       location: missingField
     })
-  } else {
-    //console.log('All required fields are there!');
   }
 
 //verify that all field inputs are of the right type

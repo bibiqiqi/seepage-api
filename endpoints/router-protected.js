@@ -7,7 +7,7 @@ const path = require('path');
 const crypto = require('crypto');
 const Grid = require('gridfs-stream');
 const util = require('util');
-const multiparty = require('multiparty')
+const multiparty = require('multiparty');
 const sharp = require('sharp');
 const Binary = require('mongodb').Binary;
 
@@ -28,13 +28,14 @@ mongoConn.once('open', () => {
 
 router.use(bodyParser.json({limit: '50mb', extended: true}));
 
+//uses multiparty to parse a multipart form request and return an object with files and fields keys
 function parseForm(request) {
   return new Promise(function(resolve, reject) {
     let resolveObject = {};
     const form = new multiparty.Form();
     form.parse(request, function(err, fields, files) {
       if(err){
-        console.log('sending a promise rejection from multiparty parsing');
+        //console.log('sending a promise rejection from multiparty parsing');
         reject(err);
       }
       if(files) {
@@ -51,126 +52,78 @@ function parseForm(request) {
   })
 }
 
-function uploadThumbNail(file, index, contentId, artistName, title){
+//uses grid-fs stream to write file to GridFS, and promise resolves with the uploaded file
+//called by uploadTandF()
+function uploadFile(file, fileName){
   return new Promise(function(resolve, reject) {
-    sharp(file.path)
-      .resize(500, 500, {fit: 'cover'})
-      .toFormat('jpg')
-      .toBuffer({resolveWithObject: true})
-      .then((thumbNailBuffer) => {
-        const fileName = `${artistName}_${title}_tn${index}`;
-        Content.
-          findByIdAndUpdate(contentId,
-            {$push: {
-              thumbNails: {
-                contentId: contentId,
-                fileName: fileName,
-                data: Binary(thumbNailBuffer.data),
-                }
-              }
-            },
-            {'new': true},
-            (error, doc) => {
-              if (error) {
-                //console.log('returning a promise reject from trying to insert thumbnails in mongo')
-                reject(error)
-              } else {
-                console.log('after carrying out uploadThumbnail, doc.thumbnails array is now', doc.thumbNails)
-                resolve(doc.thumbNails[doc.thumbNails.length-1])
-              }
-          })
+    const writestream = gfs.createWriteStream({filename: fileName});
+    fs.createReadStream(file.path).pipe(writestream);
+    writestream.on("error", (error) => {
+      console.log('returning a promise reject from trying to write files to gridfs');
+      reject(error)
+    });
+    writestream.on("close", (uploadedFile) => resolve(uploadedFile));
+  });
+}
+
+router.post('/content', jwtAuth, (req, res ) => {
+
+//uploads only the text-based fields for a content entry
+//returns a promise that resolves with the inserted document
+ function insertContent(fieldsObject, fileObjects) {
+   return new Promise(function(resolve, reject) {
+     Content
+       .create({
+         artistName: fieldsObject.artistName[0],
+         title: fieldsObject.title[0],
+         category: fieldsObject.category,
+         tags: fieldsObject.tags,
+         files: fileObjects
+       }, function(err, insertedContent) {
+         if(err) {
+           console.log('returning promise reject from Content.create in mongo');
+           reject(err)
+         } else {
+           console.log('returning promise resolve from Content.create in mongo');
+           resolve(insertedContent)
+         }
       })
-    })
-  }
-
-  function uploadFile(file, index, contentId, artistName, title, thumbNailId){
-    return new Promise(function(resolve, reject) {
-      const fileName = `${artistName}_${title}_${index}`;
-      const fileInfo = {
-        filename: fileName,
-        metadata: {
-          contentId: contentId,
-          thumbNailId: thumbNailId
-        }
-      };
-      const writestream = gfs.createWriteStream(fileInfo);
-      fs.createReadStream(file.path).pipe(writestream);
-      writestream.on("error", (error) => {
-        //console.log('returning a promise reject from trying to write files to gridfs');
-        reject(error)
-      });
-      writestream.on("close", (uploadedFile) => resolve(uploadedFile));
-    })
-  }
-
-  function uploadTandF(filesArray, contentId, artistName, title, index) {
-    //console.log('doing uploadTandF with this filesArray', filesArray);
-    return new Promise(function(resolve, reject) {
-       const _artistName = artistName.replace(/ /g, '_');
-       const _title = title.replace(/ /g, '_');
-       return Promise.all(filesArray.map((file) => {
-         return new Promise(async function(resolve, reject) {
-           try {
-             let uploadedThumbNail = await uploadThumbNail(file, index, contentId, _artistName, _title);
-             let fileAdded = await uploadFile(file, index, contentId, _artistName, _title, uploadedThumbNail.id);
-             ++index;
-             resolve(uploadedThumbNail);
-           } catch(err) {
-             reject(err);
-           }
-         })
-       })).then(uploadedThumbNails => resolve(uploadedThumbNails))
-    })
-  }
-
- //parse the multiform data into field and files,
- //upload fields to mongo and retrieve the Id
- //resize files and upload them as thumbnails to the corresponding doc in mongo
- //upload files to GridFs with the contentId attached
- router.post('/content', jwtAuth, (req, res ) => {
-
- //define insertContent function for posting all fields
-   function insertContent(fieldsObject) {
-     return new Promise(function(resolve, reject) {
-       Content
-         .create({
-           artistName: fieldsObject.artistName[0],
-           title: fieldsObject.title[0],
-           category: fieldsObject.category,
-           tags: fieldsObject.tags
-         }, function(err, insertedContent) {
-           if(err) {
-             //console.log('returning promise reject from Content.create in mongo');
-             reject(err)
-           } else {
-             //console.log('returning promise resolve from Content.create in mongo');
-             resolve(insertedContent)
-           }
-        })
-     })
-  }
-
+   })
+}
+//calls parseForm to parse the multipart form,
+//validateFields to validate the text-fields,
+//uploadFile to insert the file into gridFs
+//and then inserts the fields into mongo with the file id
   function parseAndInsert(request) {
     return new Promise(async function(resolve, reject) {
       //parse text and files fields
       const parsed = await parseForm(request);
-      console.log('parsed results are:', parsed);
+      //console.log('parsed results are:', parsed);
       const {files, fields} = parsed;
-      let artistName, title, insertedContentId;
+      console.log('parsed files are', files);
+      console.log('parsed fields are', fields);
       validateFields(fields).then(async (fields) => {
-        //console.log('validateFields succeeded')
-        //insert all the content except for the thumbnails into mongodb
-        const insertedContent = await insertContent(fields);
-        return Promise.resolve(insertedContent);
-      }).catch(error => reject(error)) //errors from validateFields promise
-        .then(insertedContent => {
-          console.log('passing insertedContent onto uploadTandF', insertedContent);
-          uploadTandF(files, insertedContent.id, insertedContent.artistName, insertedContent.title);
-        }).then(resolved => {
-          console.log('returning a resolve promise from parseAndInsert');
-          resolve(resolved);
+        const {artistName, title} = fields;
+        const _artistName = artistName[0].replace(/ /g, '_');
+        const _title = title[0].replace(/ /g, '_');
+        return Promise.all(files.map((file, index) => {
+          const fileName = `${_artistName}_${_title}_${index}`;
+          return new Promise(async function (resolve, reject) {
+            const fileObject = {};
+            fileObject.type = file.headers['content-type'];
+            fileObject.name = fileName;
+            const uploadedFile = await uploadFile(file, fileName);
+            fileObject.fileId = await uploadedFile._id;
+            resolve(fileObject);
           })
-      }).catch(error => reject(error))  //errors from Promise.all promise
+        })).then(async (fileObjects) => {
+          console.log('fileObjects are:', fileObjects);
+          const insertedContent = await insertContent(fields, fileObjects);
+          console.log('insertedContent is:', insertedContent);
+          resolve(insertedContent);
+        }).catch(error => reject(error))
+      }).catch(error => reject(error))
+    });
   }
 
   try {
@@ -186,9 +139,9 @@ function uploadThumbNail(file, index, contentId, artistName, title){
 });
 
 
+
 router.patch('/content/:contentId', jwtAuth, (req, res) => {
-  //console.log('reached the patch endpoint!');
-  //patch only accepts 1 field to edit at a time
+  //patch only accepts 1 text field to edit at a time
   const contentId = req.params.contentId;
   console.log(req.body);
   Content
@@ -200,7 +153,6 @@ router.patch('/content/:contentId', jwtAuth, (req, res) => {
     .then(edited => {
       console.log('successfully updated the following:', edited);
       res.json(edited.serialize())
-      //res.status(200).end();
     })
     .catch(err => {
     console.error(err);
@@ -211,9 +163,9 @@ router.patch('/content/:contentId', jwtAuth, (req, res) => {
 
 router.patch('/files/:contentId', jwtAuth, (req, res) => {
   const contentId = req.params.contentId;
-  //1. return a promise of the parsed fields and files
-  //fields is an object where the property names are field names and the values are arrays of field values.
-  //files is an object where the property names are field names and the values are arrays of file objects.
+
+  //removes thumbNails from array of ids (filesArray) and returns the new thumbnails from
+  //the modified doc
   function removeThumbNails(filesArray, id){
     console.log('doing removeThumbNails');
     return new Promise(function(resolve, reject) {
@@ -234,6 +186,8 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
     })
   }
 
+  //removes files from array of ids (filesArray) and returns the new files from
+  //the modified doc
   function removeFiles(filesArray){
     console.log('doing removeFiles');
     return new Promise(function(resolve, reject) {
@@ -253,6 +207,7 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
      })
   }
 
+  //calls removeThumbNails and removeFiles and returns the current array of thumbnails after removal
   function removeTnsAndFiles(fields){
     return new Promise(async function(resolve, reject) {
       const postRemoveTn = await removeThumbNails(fields, contentId);
@@ -262,6 +217,8 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
     })
   }
 
+//queries mongo to pass on artistName, title, and number of thumbnails currently in mongo
+//calls uploadTandF and resolves with an array of the thumbNails that were uploaded
   function uploadTnsAndFiles(files){
     return new Promise(function(resolve, reject) {
       //console.log('contentId in uploadTnsAndFiles is', contentId);
@@ -276,6 +233,9 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
     })
   }
 
+  //determines whether to call removeTnsAndFile or uploadTnsAndFiles or both
+  //and returns a promise that resolves with the new array of thumbNails
+  //called by parseAndEdit
   function editTnsAndFiles(parsed) {
     return new Promise(async function(resolve, reject) {
       const {files, fields} = parsed;
@@ -300,6 +260,7 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
     })
   }
 
+//calls parseForm and then editTnsAndFiles and returns promise which resolves with the new array of thumbnails
   function parseAndEdit(request){
     return new Promise(async function(resolve, reject) {
       const parsed = await parseForm(request);
@@ -317,6 +278,7 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
     })
 })
 
+//queries mongo by id of content entry and removes document
 router.delete('/content/:contentId', jwtAuth, (req, res) => {
   //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
   Content
