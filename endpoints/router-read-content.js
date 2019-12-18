@@ -23,10 +23,11 @@ mongoConn.once('open', () => {
 
 router.use(bodyParser.json());
 
+//queries mongo for all content, minus the fileIds
 router.get('/', (req, res) => {
   Content
     .find()
-    .select('-thumbNails')
+    .select('-fileIds')
     .sort({category: 'asc'})
     .then(contents => {
       res.json(contents.map(content => content.serialize()));
@@ -37,17 +38,16 @@ router.get('/', (req, res) => {
     });
 });
 
-//mediaTypes:
-//image, video, audio, text
-router.get('/thumbnails/:contentId', (req, res) => {
+router.get('/fileIds/:contentId', (req, res) => {
+  //queries mongo for array of fileIds for specific content
   //console.log('contentId sent to this endpoint is', req.params.contentId)
   Content
     .findById(req.params.contentId)
-    .select('thumbNails')
-    .then(thumbNails => {
-      //console.log('sending back these thumbNails', thumbNails);
+    .select('files')
+    .then(fileObjects => {
+      console.log('sending back these fileObjects', fileObjects.files);
       res.contentType('json');
-      res.send(thumbNails);
+      res.send(fileObjects.files);
     })
     .catch(err => {
       console.error(err);
@@ -55,9 +55,10 @@ router.get('/thumbnails/:contentId', (req, res) => {
     });
 });
 
-router.get('/files/:thumbNailId', (req, res) => {
-  console.log('req.params.thumbNailId is', req.params.thumbNailId);
-  gfs.files.findOne({'metadata.thumbNailId': req.params.thumbNailId}, function(err, file) {
+router.get('/files/:fileId', (req, res) => {
+  //queries GridFS for file associated with thumbnail id in request
+  console.log('req.params.fileId is', req.params.fileId);
+  gfs.files.find({id: req.params.fileId}, function(err, file) {
       if (err) {
         console.log(err);
         //handleError(err);
@@ -70,7 +71,8 @@ router.get('/files/:thumbNailId', (req, res) => {
         });
       }
       console.log('file was found', file);
-      gfs.createReadStream({_id: file._id}).pipe(res);
+      const readStream = gfs.createReadStream({_id: req.params.fileId});
+      readStream.pipe(res);
     }
   )
 })

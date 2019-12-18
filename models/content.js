@@ -4,28 +4,26 @@ const mongoose = require('mongoose');
 
 mongoose.Promise = global.Promise;
 
-const ThumbNailSchema = mongoose.Schema({
-  contentId: {type: String, require: true},
-  fileName: {type: String, require: true},
-  data: {type: Buffer, require: true}
-});
+// const FileSchema = mongoose.Schema({
+//   fileType: {type: String, require: true},
+//   fileId: {type: String, require: true}
+// });
 
 const ContentSchema = mongoose.Schema({
   artistName: {type: String, require: true},
   title: {type: String, require: true},
   category: {type: [String], require: true},
   tags: {type: [String], require: true},
-  thumbNails: [ThumbNailSchema]
+  files: {type: Array, require: true}
 });
 
-ThumbNailSchema.methods.serialize = function() {
-  return {
-    id: this._id,
-    contentId: this.contentId,
-    fileName: this.fileName,
-    data: this.data,
-  }
-}
+// FileSchema.methods.serialize = function() {
+//   return {
+//     id: this._id,
+//     fileType: this.fileType,
+//     fileId: this.fileId,
+//   }
+// }
 
 ContentSchema.methods.serialize = function() {
   return {
@@ -34,7 +32,7 @@ ContentSchema.methods.serialize = function() {
     title: this.title,
     category: this.category,
     tags: this.tags,
-    thumbNails: this.thumbNails
+    files: this.files
   }
 }
 
