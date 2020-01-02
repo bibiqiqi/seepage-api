@@ -38,8 +38,6 @@ router.post('/', jsonParser, (req, res) => {
       message: 'Incorrect field type: expected string',
       location: nonStringField
     });
-  } else {
-    //console.log('All field inputs are of the right type!');
   }
 
 //verify that none of the fields that need to be explicitly trimmed
@@ -56,8 +54,6 @@ router.post('/', jsonParser, (req, res) => {
       message: 'Cannot start or end with whitespace',
       location: nonTrimmedField
     })
-  } else {
-    //console.log('All the necessary fields are trimmed!');
   }
 
   //verify that fields with size requirements fit within those requirements
@@ -87,15 +83,13 @@ router.post('/', jsonParser, (req, res) => {
       : `Must be no larger than ${sizedFields[tooLargeField].max} characters long`,
       location: tooSmallField || tooLargeField
     })
-  } else {
-    //console.log('All field inputs meet their size requirements!');
   }
 
 //trim the trimmable fields
 let {email, password, firstName, lastName} = req.body;
-email = email.trim();
-firstName = firstName.trim();
-lastName = lastName.trim();
+email = email.trim().toLowerCase();
+firstName = firstName.trim().toLowerCase();
+lastName = lastName.trim().toLowerCase();
 return Editor.find({email})
   .count()
   .then(count => {
@@ -103,8 +97,7 @@ return Editor.find({email})
     if (count > 0) {
       //console.log('there is already an editor in the DB with that email');
       //then there is an existing editor in the DB with this Email
-      return Promise.reject({
-        code: 422,
+      return res.status(422).json({
         reason: 'ValidationError',
         message: 'Email is already associated with an editor account',
         location: 'email'
@@ -125,10 +118,7 @@ return Editor.find({email})
     return res.status(201).json(editor.serialize());
   })
   .catch(err => {
-    if (err.reason === 'ValidationError') {
-      return res.status(err.code).json(err);
-    }
-    res.status(500).json({code: 500, message: 'Internal server error'});
+    return res.status(500).json({error: 'Internal server error'});
   });
 });
 
