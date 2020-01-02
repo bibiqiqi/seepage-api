@@ -5,9 +5,11 @@ const validateFields = (fieldsObject) => {
       const field = requiredFields[i];
       if (!(field in fieldsObject)) {
         const message = `Missing \`${field}\` in request body`;
+        console.log('validateFields is sending a reject message', message);
         reject(message);
       }
     }
+    //console.log('validateFields is sending a resolve object', fieldsObject);
     resolve(fieldsObject);
   })
 }

@@ -4,26 +4,28 @@ const mongoose = require('mongoose');
 
 mongoose.Promise = global.Promise;
 
-// const FileSchema = mongoose.Schema({
-//   fileType: {type: String, require: true},
-//   fileId: {type: String, require: true}
-// });
+const FileSchema = mongoose.Schema({
+  fileType: {type: String, require: true},
+  fileName: {type: String, require: true},
+  fileId: {type: String, require: true}
+});
 
 const ContentSchema = mongoose.Schema({
   artistName: {type: String, require: true},
   title: {type: String, require: true},
   category: {type: [String], require: true},
   tags: {type: [String], require: true},
-  files: {type: Array, require: true}
+  files: [FileSchema]
 });
 
-// FileSchema.methods.serialize = function() {
-//   return {
-//     id: this._id,
-//     fileType: this.fileType,
-//     fileId: this.fileId,
-//   }
-// }
+FileSchema.methods.serialize = function() {
+  return {
+    id: this._id,
+    fileType: this.fileType,
+    fileName: this.fileName,
+    fileId: this.fileId,
+  }
+}
 
 ContentSchema.methods.serialize = function() {
   return {
@@ -37,5 +39,7 @@ ContentSchema.methods.serialize = function() {
 }
 
 const Content = mongoose.model('Content', ContentSchema);
+const File = mongoose.model('File', FileSchema);
 
-module.exports = {Content};
+
+module.exports = {Content, File};
