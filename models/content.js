@@ -13,6 +13,7 @@ const FileSchema = mongoose.Schema({
 const ContentSchema = mongoose.Schema({
   artistName: {type: String, require: true},
   title: {type: String, require: true},
+  description: {type: String, require: false},
   category: {type: [String], require: true},
   tags: {type: [String], require: true},
   files: [FileSchema]
@@ -32,6 +33,7 @@ ContentSchema.methods.serialize = function() {
     id: this._id,
     artistName: this.artistName,
     title: this.title,
+    description: this.description,
     category: this.category,
     tags: this.tags,
     files: this.files

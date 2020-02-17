@@ -1,6 +1,17 @@
+const mongoose = require('mongoose');
 const _ = require('underscore');
 const casual = require('casual-browserify');
 //const fs = require('fs');
+
+
+function tearDownDb(){
+  return new Promise((resolve, reject) => {
+    console.warn('Deleting database');
+    mongoose.connection.dropDatabase()
+      .then(result => resolve(result))
+      .catch(err => reject(err));
+  });
+}
 
 //for each set of data(nodes and links), createTagPool() generates a
 //pool of tags, then generateNodes() generates a random number of nodes,
@@ -15,7 +26,6 @@ function createTagPool(){
     tagPool.push(casual.word);
   }
   _.uniq(tagPool);
-  //console.log('tag pool', tagPool);
   return tagPool;
 }
 
@@ -29,25 +39,15 @@ function pickTags(tagPool){
   return tags;
 }
 
-const generateContent = () => {
+function generateContent(){
   const categories = [
-    {
-      color: "red",
-      category: "performance"
-    },
-    {
-      color: "blue",
-      category: "text"
-    },
-    {
-      color: "yellow",
-      category: "media"
-    }
+    "performance",
+    "text",
+    "media",
   ];
   const tagPool = createTagPool();
   const nodes = [];
   const randomNumber= _.random(4, 10);
-  //console.log('number of nodes', randomNumber);
   let uniqKey = 100;
   let i;
   for (i = 0; i < randomNumber; i++) {
@@ -59,18 +59,18 @@ const generateContent = () => {
     //});
 
     nodes[i] = {
-      //index: i,
-      //key: uniqKey++,
       artistName: casual.full_name,
       title: casual.title,
-      //color: type.color,
       category: type.category,
+      description: casual.description,
       tags: _.uniq(_.sortBy(pickTags(tagPool)), true),
-      //content: fs.readFileSync('./dummyArt.jpg')
+      files: []
     };
  }
  //console.log('nodes', nodes);
  return nodes;
 }
 
-module.exports = {generateContent};
+
+
+module.exports = {tearDownDb, generateContent};

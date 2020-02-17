@@ -2,13 +2,12 @@
 //
 // const chai = require('chai');
 // const chaiHttp = require('chai-http');
-// const mongoose = require('mongoose');
 // const jwt = require('jsonwebtoken');
 //
 // const { app, runServer, closeServer } = require('../server');
 // const { Editor } = require('../models/editor')
-//const { JWT_SECRET, TEST_DATABASE_URL, PORT } = require('../config');
-
+// const { JWT_SECRET, TEST_DATABASE_URL, PORT } = require('../config');
+// const { tearDownDb } = require('./generate-fake-data');
 //
 // const expect = chai.expect;
 //
@@ -18,15 +17,6 @@
 // const password = '1234567891';
 // const firstName = 'Eddie';
 // const lastName = 'Editor';
-//
-// function tearDownDb(){
-//   return new Promise((resolve, reject) => {
-//     console.warn('Deleting database');
-//     mongoose.connection.dropDatabase()
-//       .then(result => resolve(result))
-//       .catch(err => reject(err));
-//   });
-// }
 //
 // describe('/auth/login', function() {
 //   before(function() {
@@ -179,5 +169,5 @@
 //         });
 //       });
 //     });
-// //   });
+//   });
 // })

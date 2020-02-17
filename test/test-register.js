@@ -4,9 +4,10 @@
 // const chaiHttp = require('chai-http');
 // const mongoose = require('mongoose');
 //
-const { app, runServer, closeServer } = require('../server');
+// const { app, runServer, closeServer } = require('../server');
 // const { Editor } = require('../models/editor');
 // const { TEST_DATABASE_URL } = require('../config');
+// const { tearDownDb } = require('./generate-fake-data');
 //
 // const expect = chai.expect;
 //
@@ -41,28 +42,14 @@ const { app, runServer, closeServer } = require('../server');
 //   return Editor.insertMany(seedData);
 // }
 //
-// function tearDownDb(){
-//   return new Promise((resolve, reject) => {
-//     console.warn('Deleting database');
-//     mongoose.connection.dropDatabase()
-//       .then(result => resolve(result))
-//       .catch(err => reject(err));
-//   });
-// }
-//
-describe('/editors', function(){
-//   function tearDownDb(){
-//     return new Promise((resolve, reject) => {
-//       console.warn('Deleting database');
-//       mongoose.connection.dropDatabase()
-//         .then(result => resolve(result))
-//         .catch(err => reject(err));
-//     });
-//   }
-//
-   after(function() {
-     return closeServer();
-   });
+// describe('/editors', function(){
+//    before(function() {
+//      console.log('running runServer');
+//      return runServer(TEST_DATABASE_URL);
+//    });
+//    after(function() {
+//      return closeServer();
+//    });
 //
 //    afterEach(function () {
 //      return tearDownDb();
@@ -234,4 +221,4 @@ describe('/editors', function(){
 //         });
 //     });
 //   })
-})
+// })

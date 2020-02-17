@@ -61,6 +61,7 @@ function parseForm(request) {
        .create({
          artistName: fieldsObject.artistName[0],
          title: fieldsObject.title[0],
+         description: fieldsObject.description[0],
          category: fieldsObject.category,
          tags: fieldsObject.tags,
        }, function(err, insertedContent) {
@@ -214,6 +215,7 @@ router.post('/content', jwtAuth, (req, res ) => {
       .then(parseObject => {
         return new Promise(async function(resolve, reject) {
           const {fields, files} = parseObject
+          console.log(fields);
           let insertedContent = await insertContent(fields);
           let uploadedDoc = await uploadFilesAndSubDocs(files, insertedContent)
           resolve(uploadedDoc)
@@ -301,12 +303,15 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
 //delete endpoint for full document
 router.delete('/content/:contentId', jwtAuth, (req, res) => {
   //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
-  Content
+Content
   .findByIdAndRemove(req.params.contentId)
-  .then((res) => {
-    //console.log('the content that was deleted from Mongo is:', deletedContent);
+  .then((deletedContent) => {
+    console.log('the content that was deleted from Mongo is:', deletedContent);
+    const deleteFiles = deletedContent.files.map(e => {
+      return e.fileId
+    })
     gfs.files
-      .deleteMany({id: deletedContent.id})
+      .deleteMany({id: deleteFiles})
       .then(() => {
         res.status(204).end();
       })
