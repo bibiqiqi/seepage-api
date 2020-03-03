@@ -46,7 +46,7 @@ router.get('/files/:fileId', (req, res) => {
       }
       if (!file) {
         return res.status(404).json({
-          err: 'file doesnt exist'
+          error: 'file doesnt exist'
         });
       }
       //console.log('file was found', file);

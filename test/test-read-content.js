@@ -2,13 +2,12 @@
 //
 // const chai = require('chai');
 // const chaiHttp = require('chai-http');
-// const mongoose = require('mongoose');
-// const Grid = require('gridfs-stream');
-// const fs = require('fs');
-//
-// const {DATABASE_URL} = require('../config');
-// const { app, runServer, closeServer, upload } = require('../server');
-// const { generateContent } = require('./generate-fake-data');
+//  const mongoose = require('mongoose');
+//  const Grid = require('gridfs-stream');
+//  const fs = require('fs');
+// const {TEST_DATABASE_URL} = require('../config');
+// const { app, runServer, closeServer} = require('../server');
+// const { tearDownDb, genFakeDataPromises, realToken, realUser} = require('./generate-fake-data');
 // const { Content } = require('../models/content');
 //
 // const expect = chai.expect;
@@ -17,110 +16,25 @@
 // //for gfs
 // const mongoConn = mongoose.connection;
 // let gfs;
-//
+// //
 // //define gfs stream
 // mongoConn.once('open', () => {
 //   gfs = Grid(mongoConn.db, mongoose.mongo);
 //   gfs.collection('fs');
 // })
 //
-// let contentId;
-//
-// function seedFakeContent() {
-//   return new Promise((resolve, reject) => {
-//     const dummyData = generateContent();
-//     console.log('dummyData is', dummyData);
-//     Content
-//       .insertMany(dummyData)
-//       .then(function(insertedContent){
-//         console.log('the inserted content is', insertedContent);
-//         contentId = insertedContent[0].id;
-//         //console.log('the Content id is:', contentId);
-//         resolve(insertedContent);
-//     })
-//   });
-// };
-//
-// // function seedGfsFiles(insertedContent) {
-// //   // maps all the text info ("artist name", "title", "tags") that is inserted into database, and for each entry,
-// //   // adds a "dummy art" file for that entry
-// //   // currently, inserting 1 dummy file per entry works, but now i need to be able to insert multiple files per entry
-// //   // commented out the Promise.all, so I can just get this working for 1 content entry first
-// //   const filePaths = ['./dummyArt.jpg', './dummyArt2.jpg', './dummyArt3.jpg'];
-// //   return Promise.all(
-// //    insertedContent.map(function(content, i) {
-// //      return new Promise(function(resolve,reject) {
-// //         let x;
-// //         for (x = 0; x < filePaths; x++) {
-// //           const writeStream = gfs.createWriteStream({
-// //             metadata: {contentId: content.id}
-// //           });
-// //           fs.createReadStream(filePaths[x]).pipe(writestream);
-// //           writestream.on("error",reject);
-// //           writestream.on("close", function(uploadedFile) {
-// //            console.log(`file ${x} was uploaded`);
-// //            resolve(uploadedFile);
-// //           });
-// //         }
-// //      })
-// //    })
-// //  )
-// // }
-// //
-// // const filePaths = ['./dummyArt.jpg', './dummyArt2.jpg', './dummyArt3.jpg'];
-// //
-// //  return Promise.all(
-// //    insertedContent.map(function(content, i) {
-// //      return new Promise(function(resolve,reject) {
-// //        for (const [j, item] of filePaths.entries()) {
-// //          let writestreams = [];
-// //          writestreams[j] = gfs.createWriteStream({
-// //            metadata: {
-// //              contentId: content.id,
-// //              mediaType: 'image'
-// //            }
-// //          });
-// //
-// //          fs.createReadStream(filePaths[j]).pipe(writestreams[j]);
-// //          writestreams[j].on("error", reject);
-// //          writestreams[j].on("close", function(uploadedFile) {
-// //            console.log(`file ${j} of artist ${i} was uploaded`);
-// //            resolve(uploadedFile);
-// //          });
-// //        }
-// //      })
-// //    })
-// //  )
-// // }
-//
 // describe('Content endpoints', function () {
 //
-//   before(function() {
-//    console.log('running server');
-//    return runServer(DATABASE_URL);
-//   });
-//
-//  after(function() {
-//    console.log('closing server');
-//    return closeServer();
-//  });
-//
-//   // beforeEach(function () {
-//   //   return seedGfsFiles();
-//   // });
-//
-// //remove after filling db
-//   beforeEach(function () {
-//     return seedFakeContent();
+//   beforeEach(function() {
+//     return genFakeDataPromises(4, realToken, realUser).then(promises => {
+//       return Promise.all(promises).then(res => {
+//         // console.log('promise.all is done')
+//       })
+//     })
 //   });
 //
 //   afterEach(function () {
-//     return new Promise((resolve, reject) => {
-//       console.warn('Deleting database');
-//       mongoose.connection.dropDatabase()
-//         .then(result => resolve(result))
-//         .catch(err => reject(err));
-//     });
+//     return tearDownDb();
 //   });
 //
 //   describe('GET', function () {
@@ -131,14 +45,23 @@
 //           .get('/content')
 //           .then(res => {
 //             _res = res;
-//             //console.log(_res.body.contents);
+//             // console.log('***** the response sent back from GET request is:', _res.body);
 //             expect(res).to.have.status(200);
-//             expect(res.body.contents).to.have.lengthOf.at.least(1);
+//             expect(res.body).to.have.lengthOf.at.least(1);
 //             return Content.count();
 //           })
 //           .then(count => {
-//               expect(_res.body.contents).to.have.lengthOf(count);
-//           });
+//               expect(_res.body).to.have.lengthOf(count);
+//               return gfs.files.count();
+//           })
+//           .then(count => {
+//             // console.log('count returned is', count);
+//             let totalFiles = 0;
+//             _res.body.map(e => {
+//               totalFiles += e.files.length
+//             })
+//             expect(totalFiles).to.equal(count);
+//           })
 //       });
 //       it('should return contents with right fields', function() {
 //         let resContent;
@@ -148,49 +71,40 @@
 //             //console.log(res.body.contents);
 //             expect(res).to.have.status(200);
 //             expect(res).to.be.json;
-//             expect(res.body.contents).to.be.a('array');
-//             expect(res.body.contents).to.have.lengthOf.at.least(1);
+//             expect(res.body).to.be.a('array');
+//             expect(res.body).to.have.lengthOf.at.least(1);
 //
-//             res.body.contents.forEach(function(content) {
+//             res.body.forEach(function(content) {
 //               expect(content).to.be.a('object');
 //               expect(content).to.include.keys(
-//                 'artistName', 'title', 'category', 'tags');
+//                 'artistName', 'title', 'category', 'tags', 'description', 'files');
 //             });
-//             resContent = res.body.contents[0];
+//             resContent = res.body[0];
 //             return Content.findById(resContent.id);
 //           })
 //           .then(function(content) {
 //             //console.log(content);
 //             expect(resContent.artistName).to.equal(content.artistName);
 //             expect(resContent.title).to.equal(content.title);
-//             expect(resContent.category).to.contain(content.category);
-//             expect(resContent.tags[1]).to.equal(content.tags[1]);
+//             expect(resContent.description).to.equal(content.description);
+//             expect(resContent.category[0]).to.equal(content.category[0]);
+//             expect(resContent.tags[0]).to.equal(content.tags[0]);
 //           });
 //         });
 //       });
 //       describe('/content/:contentId', function () {
 //         it('should return the requested content', function() {
-//           return seedFakeContent()
-//             .then(function(insertedContent) {
-//               //console.log('seeded fake content and this is what was inserted:', insertedContent);
-//               return seedGfsFiles(insertedContent)
-//             }).then(function(uploadedFiles) {
-//               //console.log('uploaded corresponding files and this is what was inserted:', uploadedFiles);
-//               //console.log('gfs is:', gfs);
-//             return gfs.files
+//           let fileId;
+//           return Content
 //             .findOne()
-//             .then(function(file) {
-//             //console.log('the file i found was', file);
-//              const contentId = file.metadata.contentId;
-//              return chai.request(app)
-//                .get(`/content/${contentId}`)
-//                .then(res => {
-//                  //console.log(res);
-//                  expect(res).to.have.status(200);
-//                  //expect(res.files).to.have.lengthOf.at.least(1);
-//                })
+//             .then(function(content) {
+//               fileId = content.files[0].fileId
+//               return chai.request(app)
+//                 .get(`/content/files/${fileId}`)
+//                 .then(res => {
+//                   expect(res).to.have.status(200);
+//                 })
 //             })
-//           })
 //         });
 //      });
 //   });

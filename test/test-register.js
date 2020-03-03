@@ -24,7 +24,7 @@
 // const passwordB = '1987654321';
 //
 // function seedEditorData() {
-//   console.log('Seeding editor data');
+//   // console.log('Seeding editor data');
 //   const seedData = [
 //     {
 //       email,
@@ -43,16 +43,13 @@
 // }
 //
 // describe('/editors', function(){
-//    before(function() {
-//      console.log('running runServer');
-//      return runServer(TEST_DATABASE_URL);
-//    });
+//
+//   afterEach(function () {
+//     return tearDownDb();
+//   });
+//
 //    after(function() {
 //      return closeServer();
-//    });
-//
-//    afterEach(function () {
-//      return tearDownDb();
 //    });
 //
 //   describe('/editors', function() {
@@ -170,7 +167,7 @@
 //             password
 //           })
 //           .then(res => {
-//             console.log(res.body);
+//             // console.log(res.body);
 //             expect(res).to.have.status(201);
 //             expect(res.body).to.be.an('object');
 //             expect(res.body).to.include.keys(

@@ -38,8 +38,6 @@ router.post('/', jsonParser, (req, res) => {
       message: 'Incorrect field type: expected string',
       location: nonStringField
     });
-  } else {
-    //console.log('All field inputs are of the right type!');
   }
 
 //verify that none of the fields that need to be explicitly trimmed
@@ -56,8 +54,6 @@ router.post('/', jsonParser, (req, res) => {
       message: 'Cannot start or end with whitespace',
       location: nonTrimmedField
     })
-  } else {
-    //console.log('All the necessary fields are trimmed!');
   }
 
   //verify that fields with size requirements fit within those requirements
@@ -87,8 +83,6 @@ router.post('/', jsonParser, (req, res) => {
       : `Must be no larger than ${sizedFields[tooLargeField].max} characters long`,
       location: tooSmallField || tooLargeField
     })
-  } else {
-    //console.log('All field inputs meet their size requirements!');
   }
 
 //trim the trimmable fields
@@ -126,9 +120,8 @@ return Editor.find({email})
   })
   .catch(err => {
     if (err.reason === 'ValidationError') {
-      return res.status(err.code).json(err);
+      return res.status(500).json({error: 'Internal server error'});
     }
-    res.status(500).json({code: 500, message: 'Internal server error'});
   });
 });
 

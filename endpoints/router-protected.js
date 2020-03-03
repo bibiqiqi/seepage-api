@@ -208,6 +208,7 @@ function removeFiles(filesArray){
 
 //post endpoint for new content entry - uploads parent and child doc at once
 router.post('/content', jwtAuth, (req, res ) => {
+  // console.log('received a request', req.headers);
   const form = new multiparty.Form();
   const content = {};
   try {
@@ -215,13 +216,14 @@ router.post('/content', jwtAuth, (req, res ) => {
       .then(parseObject => {
         return new Promise(async function(resolve, reject) {
           const {fields, files} = parseObject
-          console.log(fields);
+          //console.log(fields);
           let insertedContent = await insertContent(fields);
+          //console.log('content was inserted', insertedContent);
           let uploadedDoc = await uploadFilesAndSubDocs(files, insertedContent)
           resolve(uploadedDoc)
         }).then(insertedSubDocs => {
-          console.log('sending this inserted doc to the client', insertedSubDocs[0]);
-          res.json(insertedSubDocs[0].serialize())
+          //console.log('sending this inserted doc to the client', insertedSubDocs[0]);
+          res.status(201).json(insertedSubDocs[0].serialize())
         })
       })
   } catch(err) {
@@ -240,7 +242,7 @@ router.patch('/content/:contentId', jwtAuth, (req, res) => {
       {new: true}
     )
     .then(edited => {
-      res.json(edited.serialize())
+      res.status(204).json(edited.serialize())
     })
     .catch(err => {
     console.error(err);
@@ -264,7 +266,7 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
 
         function successResponse(results) {
           //console.log('sending result from edited doc to the client', results);
-          res.json(results.serialize())
+          res.status(200).json(results.serialize())
         }
 
         if(addFiles && deleteFiles){ //user wants to remove and add files
@@ -317,12 +319,12 @@ Content
       })
       .catch(err => {
         console.error(err);
-        res.status(500).json({ error: 'Something went wrong' });
+        res.status(500).json({error: 'Something went wrong'});
       });
   })
   .catch(err => {
     console.error(err);
-    res.status(500).json({ error: 'Something went wrong' });
+    res.status(500).json({error: 'Something went wrong'});
   })
 });
 
