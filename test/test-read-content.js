@@ -5,7 +5,6 @@ const chaiHttp = require('chai-http');
  const mongoose = require('mongoose');
  const Grid = require('gridfs-stream');
  const fs = require('fs');
-const {TEST_DATABASE_URL} = require('../config');
 const { app, runServer, closeServer} = require('../server');
 const { tearDownDb, genFakeDataPromises, realToken, realUser} = require('./generate-fake-data');
 const { Content } = require('../models/content');

@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 
 const { app, runServer, closeServer } = require('../server');
 const { Editor } = require('../models/editor')
-const { JWT_SECRET, TEST_DATABASE_URL, DATABASE_URL, PORT } = require('../config');
+const { JWT_SECRET, TEST_DATABASE_URL, PORT } = require('../config');
 const { tearDownDb } = require('./generate-fake-data');
 
 const expect = chai.expect;
@@ -22,7 +22,7 @@ describe('/auth/login', function() {
 
   before(function() {
     // console.log('running runServer');
-    return runServer(DATABASE_URL);
+    return runServer(TEST_DATABASE_URL);
   });
 
   beforeEach(function () {

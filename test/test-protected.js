@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const Grid = require('gridfs-stream');
 
 const { app, runServer, closeServer } = require('../server');
-const { JWT_SECRET, TEST_DATABASE_URL } = require('../config');
+const { JWT_SECRET } = require('../config');
 const { tearDownDb, genFakeDataPromises, realToken, realUser, genAndReturnPost, seedPost } = require('./generate-fake-data');
 const { Content } = require('../models/content');
 const { Editor } = require('../models/editor');

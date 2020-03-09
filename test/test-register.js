@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 
 const { app, runServer, closeServer } = require('../server');
 const { Editor } = require('../models/editor');
-const { TEST_DATABASE_URL } = require('../config');
 const { tearDownDb } = require('./generate-fake-data');
 
 const expect = chai.expect;
