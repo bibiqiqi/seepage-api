@@ -97,8 +97,7 @@ return Editor.find({email})
     if (count > 0) {
       //console.log('there is already an editor in the DB with that email');
       //then there is an existing editor in the DB with this Email
-      return Promise.reject({
-        code: 422,
+      return res.status(422).json({
         reason: 'ValidationError',
         message: 'Email is already associated with an editor account',
         location: 'email'
@@ -119,9 +118,7 @@ return Editor.find({email})
     return res.status(201).json(editor.serialize());
   })
   .catch(err => {
-    if (err.reason === 'ValidationError') {
-      return res.status(500).json({error: 'Internal server error'});
-    }
+    return res.status(500).json({error: 'Internal server error'});
   });
 });
 
