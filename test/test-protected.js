@@ -290,7 +290,7 @@ describe('Protected endpoint', function () {
                .send(patchObject)
                .set('authorization', `Bearer ${realToken(realUser)}`)
                .then(function(res) {
-                 expect(res).to.have.status(204);
+                 expect(res).to.have.status(201);
                  return Content.findById(contentId)
                })
                .then(function(content){

@@ -3,7 +3,6 @@
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const mongoose = require('mongoose');
-
 const { app, runServer, closeServer } = require('../server');
 const { Editor } = require('../models/editor');
 const { tearDownDb } = require('./generate-fake-data');
@@ -41,10 +40,6 @@ function seedEditorData() {
   return Editor.insertMany(seedData);
 }
 describe('/editors', function(){
-
-  afterEach(function () {
-    return tearDownDb();
-  });
 
    after(function() {
      return closeServer();
@@ -159,10 +154,10 @@ describe('/editors', function(){
           .request(app)
           .post('/register')
           .send({
-            email,
-            firstName,
-            lastName,
-            password
+            emailB,
+            firstNameB,
+            lastNameB,
+            passwordb
           })
           .then(res => {
             // console.log(res.body);

@@ -87,9 +87,9 @@ router.post('/', jsonParser, (req, res) => {
 
 //trim the trimmable fields
 let {email, password, firstName, lastName} = req.body;
-email = email.trim();
-firstName = firstName.trim();
-lastName = lastName.trim();
+email = email.trim().toLowerCase();
+firstName = firstName.trim().toLowerCase();
+lastName = lastName.trim().toLowerCase();
 return Editor.find({email})
   .count()
   .then(count => {

@@ -242,7 +242,7 @@ router.patch('/content/:contentId', jwtAuth, (req, res) => {
       {new: true}
     )
     .then(edited => {
-      res.status(204).json(edited.serialize())
+      res.status(201).json(edited.serialize())
     })
     .catch(err => {
     console.error(err);
