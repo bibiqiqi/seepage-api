@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 
 const { app } = require('../server');
 const { Content } = require('../models/content');
-const { JWT_SECRET} = require('../config');
+const { JWT_SECRET } = require('../config');
 chai.use(chaiHttp);
 
 const email = 'EdnaEditor@aol.com';
@@ -66,8 +66,7 @@ function pickTags(tagPool){
 }
 
 function genFakeDataPromises(promiseNum, token, user){
-  // console.log('user passed to genFakeDataPromises is', {user});
-  return new Promise(async function(resolve, reject) {
+  return new Promise(function(resolve, reject) {
     const categories = [
       "performance",
       "text",
@@ -88,8 +87,8 @@ function genPostAndSeedPromise(categories, tagPool, token, user) {
     const category = categories[_.random(0, 2)];
     const tags = _.uniq(_.sortBy(pickTags(tagPool)), true)
     let generatedPost = await generatePost(category, tags);
-    //console.log(generatedPost);
     let seededPost = await seedPost(generatedPost, token, user);
+    // console.log('seeded a post', seededPost)
     resolve(seededPost)
   })
 }
@@ -123,9 +122,6 @@ function generatePost(category, tags) {
 function seedPost(post, token, user){
   return new Promise(function(resolve, reject) {
     const authToken = token(user);
-    // console.log('token is', token);
-    // console.log('user is', user);
-     // console.log('authToken is', authToken);
     return chai
       .request(app)
       .post('/protected/content')
@@ -136,7 +132,7 @@ function seedPost(post, token, user){
       .field(Object.keys(post)[2], Object.values(post)[2])
       .field(Object.keys(post)[3], Object.values(post)[3])
       .field(Object.keys(post)[4], Object.values(post)[4])
-      .attach('files', fs.readFileSync('./test/dummy-files/dummy-file-1.jpg'), 'dummy-file-1.jpg')
+      .attach('files', fs.readFileSync('./test/dummy-file-1.jpg'), 'dummy-file-1.jpg')
       .then(res => {
         // console.log('seeded a post', res)
         resolve(res);
@@ -150,10 +146,15 @@ function seedPost(post, token, user){
 
 function tearDownDb(){
   return new Promise((resolve, reject) => {
-    console.warn('Deleting database');
     mongoose.connection.dropDatabase()
-      .then(result => resolve(result))
-      .catch(err => reject(err));
+      .then(result => {
+        console.log('deleted database')
+        resolve(result)
+      })
+      .catch(err => {
+        console.log('error in deleting database')
+        reject(err)
+      })
   });
 }
 
