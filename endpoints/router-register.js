@@ -88,14 +88,15 @@ router.post('/', jsonParser, (req, res) => {
 //trim the trimmable fields
 let {email, password, firstName, lastName} = req.body;
 email = email.trim().toLowerCase();
+// console.log('email that you tried to register is', email);
 firstName = firstName.trim().toLowerCase();
 lastName = lastName.trim().toLowerCase();
 return Editor.find({email})
   .count()
   .then(count => {
-    //console.log('found', count);
+    // console.log('found', count);
     if (count > 0) {
-      //console.log('there is already an editor in the DB with that email');
+      // console.log('there is already an editor in the DB with that email');
       //then there is an existing editor in the DB with this Email
       return res.status(422).json({
         reason: 'ValidationError',
@@ -118,7 +119,7 @@ return Editor.find({email})
     return res.status(201).json(editor.serialize());
   })
   .catch(err => {
-    return res.status(500).json({error: 'Internal server error'});
+    return err
   });
 });
 

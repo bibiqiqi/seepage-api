@@ -6,19 +6,20 @@ const mongoose = require('mongoose');
 const { app, runServer, closeServer } = require('../server');
 const { Editor } = require('../models/editor');
 const { tearDownDb } = require('./generate-fake-data');
+const {TEST_DATABASE_URL} = require('../config');
 
 const expect = chai.expect;
 
 chai.use(chaiHttp);
 
-const email = 'EddieEditor@aol.com';
-const firstName = 'Eddie';
-const lastName = 'Editor';
+const email = 'eddieeditor@aol.com';
+const firstName = 'eddie';
+const lastName = 'editor';
 const password = '1234567891';
 
-const emailB = 'EdnaEditor@aol.com';
-const firstNameB = 'Edna';
-const lastNameB = 'Editor';
+const emailB = 'ednaeditor@aol.com';
+const firstNameB = 'edna';
+const lastNameB = 'editor';
 const passwordB = '1987654321';
 
 function seedEditorData() {
@@ -39,7 +40,11 @@ function seedEditorData() {
   ];
   return Editor.insertMany(seedData);
 }
+
 describe('/editors', function(){
+    afterEach(function() {
+      return tearDownDb();
+    });
 
    after(function() {
      return closeServer();
@@ -134,13 +139,13 @@ describe('/editors', function(){
           return seedEditorData()
             .then(() =>
               chai.request(app)
-              .post('/register')
-              .send({
-                email,
-                firstName,
-                lastName,
-                password
-              })
+                .post('/register')
+                .send({
+                  email,
+                  firstName,
+                  lastName,
+                  password
+                })
             )
             .then(res => {
               expect(res).to.have.status(422);
@@ -154,10 +159,10 @@ describe('/editors', function(){
           .request(app)
           .post('/register')
           .send({
-            emailB,
-            firstNameB,
-            lastNameB,
-            passwordb
+            email,
+            firstName,
+            lastName,
+            password
           })
           .then(res => {
             // console.log(res.body);

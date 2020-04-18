@@ -11,13 +11,23 @@ const { registerRouter, authRouter, contentRouter, protectedRouter, localStrateg
 
 mongoose.Promise = global.Promise;
 
-const {CLIENT_ORIGIN, DATABASE_URL, PORT} = require('./config');
+const {CLIENT_ORIGIN_WHITE_LIST, DATABASE_URL, PORT} = require('./config');
 
 const app = express();
 
+var corsOptions = {
+ origin: function (origin, callback) {
+   if (CLIENT_ORIGIN_WHITE_LIST.indexOf(origin) !== -1) {
+     callback(null, true)
+   } else {
+     callback(new Error('Not allowed by CORS'))
+   }
+ }
+}
+
 app.use(
    cors({
-       origin: CLIENT_ORIGIN,
+       origin: corsOptions,
        credentials: true
    })
 );

@@ -31,14 +31,10 @@
     "util": "^0.11.1"
   },
   "devDependencies": {
-    "casual-browserify": "^1.5.19-2",
     "chai": "^4.2.0",
     "chai-http": "^4.2.1",
     "faker": "^4.1.0",
-    "form-data": "^2.3.3",
     "mocha": "^5.2.0",
-    "stream": "0.0.2",
-    "text-to-picture": "^1.0.0",
     "underscore": "^1.9.1"
   }
 }

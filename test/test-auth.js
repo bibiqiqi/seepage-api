@@ -73,7 +73,6 @@ describe('/auth/login', function() {
         .post('/auth/login')
         .send({ email: email, password: password })
         .then(res => {
-          //console.log(-'res sent back to client is:', res)
           expect(res).to.have.status(200);
           expect(res.body).to.be.an('object');
           const token = res.body.authToken;

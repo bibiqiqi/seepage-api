@@ -6,8 +6,9 @@ mongoose.Promise = global.Promise;
 
 const FileSchema = mongoose.Schema({
   fileType: {type: String, require: true},
-  fileName: {type: String, require: true},
-  fileId: {type: String, require: true}
+  fileName: String,
+  fileId: String,
+  fileUrl: String
 });
 
 const ContentSchema = mongoose.Schema({
@@ -25,6 +26,7 @@ FileSchema.methods.serialize = function() {
     fileType: this.fileType,
     fileName: this.fileName,
     fileId: this.fileId,
+    fileUrl: this.fileUrl
   }
 }
 

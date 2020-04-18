@@ -11,7 +11,6 @@ const multiparty = require('multiparty');
 const async = require('async');
 const Binary = require('mongodb').Binary;
 
-const {DATABASE_URL} = require('../config');
 const {Content, File} = require('../models/content');
 const {validateFields} = require('./validators');
 
@@ -40,14 +39,14 @@ function parseForm(request) {
       }
 
       if(files) {
-        //console.log('returning files from multiparty parsing');
+        console.log('returning files from multiparty parsing');
         resolveObject.files = files.files;
       }
       if(fields) {
-        //console.log('returning fields from multiparty parsing');
+        console.log('returning fields from multiparty parsing');
         resolveObject.fields = fields;
       }
-      //console.log('returning parse object from parseForm');
+      console.log('returning parse object from parseForm');
       resolve(resolveObject);
     });
   })
@@ -66,10 +65,10 @@ function parseForm(request) {
          tags: fieldsObject.tags,
        }, function(err, insertedContent) {
          if(err) {
-           //console.log('returning promise reject from insertContent in mongo');
+           console.log('returning promise reject from insertContent in mongo');
            reject(err)
          } else {
-           //console.log('returning promise resolve from insertContent in mongo');
+           console.log('returning promise resolve from insertContent in mongo');
            resolve(insertedContent)
          }
       })
@@ -86,7 +85,7 @@ function makeFileName(doc, file, index) {
 }
 
 //inserts file subDoc into mongo and returns the parent doc
-function insertSubDoc(contentId, uploadedFile, fileName) {
+function insertFileSubDoc(contentId, uploadedFile, fileName) {
   return new Promise(function(resolve, reject) {
     Content.
     findByIdAndUpdate(
@@ -100,7 +99,28 @@ function insertSubDoc(contentId, uploadedFile, fileName) {
       },
       {'new': true})
     .then(updatedDoc => {
-      //console.log('inserted subDoc and this is the updated doc', updatedDoc);
+      console.log('inserted subDoc and this is the updated doc', updatedDoc);
+      resolve(updatedDoc);
+    })
+    .catch(err => reject(err));
+  })
+}
+
+function insertUrlSubDoc(contentId, file) {
+  console.log('****file passed to insertUrlSubDoc is', file);
+  return new Promise(function(resolve, reject) {
+    Content.
+    findByIdAndUpdate(
+      contentId,
+      {$push:
+        {files: {
+          fileType: 'video',
+          fileUrl: file
+        }}
+      },
+      {'new': true})
+    .then(updatedDoc => {
+      console.log('inserted subDoc and this is the updated doc', updatedDoc);
       resolve(updatedDoc);
     })
     .catch(err => reject(err));
@@ -143,10 +163,11 @@ function uploadFile(file, fileName){
     );
     fs.createReadStream(file.path).pipe(writestream);
     writestream.on("error", (error) => {
-      //console.log('returning a promise reject from trying to write files to gridfs');
+      console.log('returning a promise reject from trying to write files to gridfs');
       reject(error)
     });
     writestream.on("close", (uploadedFile) => {
+      console.log('returning a promise resolveß from trying to write files to gridfs');
       resolve(uploadedFile);
     })
   });
@@ -170,16 +191,22 @@ function deleteTempFile(file) {
 //accepts the array of files that need to be uploaded, and maps all the necessary
 //functions to upload the file subdocs to mongo and files to gridFS
 function uploadFilesAndSubDocs(files, doc){
+  console.log('files passed to uplodFilesAndSubDocs are', files);
   return Promise.all(files.map((file, index) => {
-    //console.log('doing uploadFilesAndSubDocs');
+    console.log('doing uploadFilesAndSubDocs');
     return new Promise(async function(resolve, reject) {
-      let fileName = makeFileName(doc, file, index);
-      let uploadedFile = await uploadFile(file, fileName);
-      //console.log('file was uploaded', uploadedFile);
-      let deletedTempFiles = await deleteTempFile(file);
-      //console.log('subDoc was prepared', preparedSubDoc);
-      let modifiedDoc = await insertSubDoc(doc.id, uploadedFile, fileName);
-      //console.log('subDoc was inserted', modifiedDoc);
+      let modifiedDoc
+      if(file.originalFilename) {
+        let fileName = makeFileName(doc, file, index);
+        console.log('fileName is', fileName);
+        let uploadedFile = await uploadFile(file, fileName);
+        console.log('file was uploaded', uploadedFile);
+        let deletedTempFiles = await deleteTempFile(file);
+        modifiedDoc = await insertFileSubDoc(doc.id, uploadedFile, fileName);
+      } else {
+        modifiedDoc = await insertUrlSubDoc(doc.id, file);
+      }
+      console.log('subDoc was inserted', modifiedDoc);
       resolve(modifiedDoc);
     })
   }))
@@ -215,14 +242,22 @@ router.post('/content', jwtAuth, (req, res ) => {
     parseForm(req)
       .then(parseObject => {
         return new Promise(async function(resolve, reject) {
-          const {fields, files} = parseObject
-          //console.log(fields);
+          const {fields} = parseObject;
+          const files = parseObject.files? parseObject.files : [];
+          //console.log('files are', files);
+          console.log('fields are', fields);
+          fields.files.forEach(e => {
+            files.push(e);
+          })
+          delete fields.files;
+          console.log('files array is now', files);
+          console.log('deleted fields.files and now its', files);
           let insertedContent = await insertContent(fields);
-          //console.log('content was inserted', insertedContent);
+          console.log('content was inserted', insertedContent);
           let uploadedDoc = await uploadFilesAndSubDocs(files, insertedContent)
           resolve(uploadedDoc)
         }).then(insertedSubDocs => {
-          //console.log('sending this inserted doc to the client', insertedSubDocs[0]);
+          console.log('sending this inserted doc to the client', insertedSubDocs[0]);
           res.status(201).json(insertedSubDocs[0].serialize())
         })
       })
@@ -262,7 +297,9 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
       .then(async parsedObject => {
 
         const {files: addFiles, fields} = parsedObject;
+        console.log('addFiles is', addFiles);
         const deleteFiles = fields.files;
+        console.log('deleteFiles is', deleteFiles);
 
         function successResponse(results) {
           //console.log('sending result from edited doc to the client', results);
@@ -304,28 +341,30 @@ router.patch('/files/:contentId', jwtAuth, (req, res) => {
 
 //delete endpoint for full document
 router.delete('/content/:contentId', jwtAuth, (req, res) => {
-  //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
-Content
-  .findByIdAndRemove(req.params.contentId)
-  .then((deletedContent) => {
-    console.log('the content that was deleted from Mongo is:', deletedContent);
-    const deleteFiles = deletedContent.files.map(e => {
-      return e.fileId
-    })
-    gfs.files
-      .deleteMany({id: deleteFiles})
-      .then(() => {
-        res.status(204).end();
+  console.log('request reached the endpoint and the contentId is:', req.params.contentId);
+  Content
+    .findByIdAndRemove(req.params.contentId)
+    .then((deletedContent) => {
+      console.log('the content that was deleted from Mongo is:', deletedContent);
+      const deleteFiles = deletedContent.files.map(e => {
+        if(e.fileId) {
+          return e.fileId
+        }
       })
-      .catch(err => {
-        console.error(err);
-        res.status(500).json({error: 'Something went wrong'});
-      });
-  })
-  .catch(err => {
-    console.error(err);
-    res.status(500).json({error: 'Something went wrong'});
-  })
+      gfs.files
+        .deleteMany({id: deleteFiles})
+        .then(() => {
+          res.status(204).end();
+        })
+        .catch(err => {
+          console.error(err);
+          res.status(500).json({error: 'Something went wrong'});
+        });
+    })
+    .catch(err => {
+      console.error(err);
+      res.status(500).json({error: 'Something went wrong'});
+    })
 });
 
 module.exports = {router};
