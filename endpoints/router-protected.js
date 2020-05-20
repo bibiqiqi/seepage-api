@@ -18,12 +18,23 @@ const router = express.Router();
 const jwtAuth = passport.authenticate('jwt', { session: false });
 //for gfs
 const mongoConn = mongoose.connection;
+
+multiparty
 let gfs;
 //define gfs stream
 mongoConn.once('open', () => {
   gfs = Grid(mongoConn.db, mongoose.mongo);
   gfs.collection('fs');
 })
+
+// //multer
+// let gfs;
+// conn.once("open", () => {
+//   // init stream
+//   gfs = new mongoose.mongo.GridFSBucket(conn.db, {
+//     bucketName: "uploads"
+//   });
+// });
 
 router.use(bodyParser.json({limit: '50mb', extended: true}));
 
@@ -35,18 +46,18 @@ function parseForm(request) {
     const form = new multiparty.Form();
     form.parse(request, function(err, fields, files) {
       if(err){
+        console.log('err is', err)
         reject(err);
       }
-
       if(files) {
-        //console.log('returning files from multiparty parsing');
+        console.log('returning files from multiparty parsing', files);
         resolveObject.files = files.files;
       }
       if(fields) {
-        //console.log('returning fields from multiparty parsing');
+        console.log('returning fields from multiparty parsing');
         resolveObject.fields = fields;
       }
-      //console.log('returning parse object from parseForm');
+      console.log('returning parse object from parseForm');
       resolve(resolveObject);
     });
   })
@@ -198,16 +209,16 @@ function uploadFilesAndSubDocs(files, doc){
       let modifiedDoc
       if(file.originalFilename) {
         let fileName = makeFileName(doc, file, index);
-        console.log('fileName is', fileName);
+        // console.log('fileName is', fileName);
         let uploadedFile = await uploadFile(file, fileName);
-        console.log('file was uploaded', uploadedFile);
+        // console.log('file was uploaded', uploadedFile);
         let deletedTempFiles = await deleteTempFile(file);
         modifiedDoc = await insertFileSubDoc(doc.id, uploadedFile, fileName);
       } else {
-        console.log('there is no file.originalFilename')
+        // console.log('there is no file.originalFilename')
         modifiedDoc = await insertUrlSubDoc(doc.id, file);
       }
-      console.log('subDoc was inserted', modifiedDoc);
+      // console.log('subDoc was inserted', modifiedDoc);
       resolve(modifiedDoc);
     })
   }))
@@ -237,17 +248,69 @@ function removeFiles(filesArray){
 //post endpoint for new content entry - uploads parent and child doc at once
 router.post('/content', jwtAuth, (req, res ) => {
   // console.log('received a request', req.headers);
+  // console.log('received a request', req.headers);
   const form = new multiparty.Form();
-  const content = {};
+  // const content = {};
+
+  // form.on('error', function(err) {
+  //   console.log('Error parsing form: ' + err.stack);
+  // });
+  //
+  // // Parts are emitted when parsing the form
+  // form.on('part', function(part) {
+  //   // You *must* act on the part by reading it
+  //   // NOTE: if you want to ignore it, just call "part.resume()"
+  //
+  //   // console.log('part.headers is', part.headers);
+  //   // part.resume()
+  //
+  //   // if(part.headers['content-type']) {
+  //   //   console.log('theres a part.headers.filename')
+  //   //   console.log('part.filename is', part.filename);
+  //   //   part.resume()
+  //   // }
+  //
+  //   if (!part.filename) {
+  //     // filename is not defined when this is a field and not a file
+  //     console.log('got field named ' + part.name);
+  //     // ignore field's content
+  //     part.resume();
+  //   }
+  //
+  //   if (part.filename) {
+  //     // filename is defined when this is a file
+  //     // console.log('got file', part)
+  //     console.log('got file named ' + part.name);
+  //     // ignore file's content here
+  //     part.resume();
+  //   }
+  //
+  //   part.on('error', function(err) {
+  //     console.log('theres an error', err)
+  //   });
+  // });
+  //
+  // // Close emitted after form parsed
+  // form.on('close', function() {
+  //   console.log('Upload completed!');
+  //   // res.setHeader('text/plain');
+  //   // res.end('Received ' + count + ' files');
+  // });
+  //
+  // // Parse req
+  // form.parse(req);
+
+
   try {
     parseForm(req)
       .then(parseObject => {
         return new Promise(async function(resolve, reject) {
           //actual fields + any video urls that are under fields.files
+          // console.log('parseObject is', parseObject)
           const {fields} = parseObject;
           //if there was a files key, copy those over to the files constant, otherwise, create an empty array
           const files = parseObject.files? parseObject.files : [];
-          console.log('files are', files);
+          // console.log('files are', files);
           // console.log('fields are', fields);
           if(fields.files) {
             fields.files.forEach(e => {
@@ -255,11 +318,12 @@ router.post('/content', jwtAuth, (req, res ) => {
             })
           }
           delete fields.files;
-          //console.log('files array is now', files);
+          // console.log('files array is now', files);
           // console.log('deleted fields.files and now its', files);
           let insertedContent = await insertContent(fields);
-           console.log('content was inserted', insertedContent);
+          // console.log('content was inserted', insertedContent);
           let uploadedDoc = await uploadFilesAndSubDocs(files, insertedContent)
+          // console.log('uploadedDoc is', uploadedDoc)
           res.status(201).json(uploadedDoc[0].serialize())
         })
       })

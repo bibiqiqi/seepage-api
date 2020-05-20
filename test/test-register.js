@@ -3,7 +3,7 @@
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const mongoose = require('mongoose');
-const { app, runServer, closeServer } = require('../server');
+const { app } = require('../server');
 const { Editor } = require('../models/editor');
 const { tearDownDb } = require('./generate-fake-data');
 
@@ -40,15 +40,11 @@ function seedEditorData() {
 }
 
 describe('/editors', function(){
-  this.timeout(10000);
+  this.timeout(5000);
 
   afterEach(function() {
-    return tearDownDb();
-  });
-
-   after(function() {
-     return closeServer();
-   });
+    return tearDownDb()
+  })
 
   describe('/editors', function() {
     describe('POST', function(){
@@ -61,12 +57,12 @@ describe('/editors', function(){
             lastName,
             password
           })
-          .then((res) => {
+          .then(function(res) {
             expect(res).to.have.status(422);
             expect(res.body.reason).to.equal('ValidationError');
             expect(res.body.message).to.equal('Missing Field');
             expect(res.body.location).to.equal('email');
-          });
+          })
       });
       it('Should reject submissions that dont include a password', function() {
         return chai
@@ -77,12 +73,12 @@ describe('/editors', function(){
             lastName,
             email
           })
-          .then(res => {
+          .then(function(res) {
             expect(res).to.have.status(422);
             expect(res.body.reason).to.equal('ValidationError');
             expect(res.body.message).to.equal('Missing Field');
             expect(res.body.location).to.equal('password');
-          });
+          })
       });
       it('Should reject submissions that include a firstName field of the wrong type', function() {
         return chai
@@ -94,7 +90,7 @@ describe('/editors', function(){
             email,
             password
           })
-          .then(res => {
+          .then(function(res) {
             expect(res).to.have.status(422);
             expect(res.body.reason).to.equal('ValidationError');
             expect(res.body.message).to.equal('Incorrect field type: expected string');
@@ -111,7 +107,7 @@ describe('/editors', function(){
             password: ` ${password} `,
             email
           })
-          .then(res => {
+          .then(function(res) {
             expect(res).to.have.status(422);
             expect(res.body.reason).to.equal('ValidationError');
             expect(res.body.message).to.equal('Cannot start or end with whitespace');
@@ -128,7 +124,7 @@ describe('/editors', function(){
           password: "23231",
           email
         })
-        .then(res => {
+        .then(function(res) {
           expect(res).to.have.status(422);
           expect(res.body.reason).to.equal('ValidationError');
           expect(res.body.message).to.equal('Must be at least 10 characters long')
@@ -137,7 +133,7 @@ describe('/editors', function(){
       });
       it('Should reject submissions that include an email address that already exists in the database', function() {
           return seedEditorData()
-            .then(() =>
+            .then(function() {
               chai.request(app)
                 .post('/register')
                 .send({
@@ -146,15 +142,16 @@ describe('/editors', function(){
                   lastName,
                   password
                 })
-            )
-            .then(res => {
-              expect(res).to.have.status(422);
-              expect(res.body.reason).to.equal('ValidationError');
-              expect(res.body.message).to.equal('Email is already associated with an editor account');
-              expect(res.body.location).to.equal('email');
+                .then(function(res) {
+                  // expect(res).to.have.status(422);
+                  expect(res.body.reason).to.equal('ValidationError');
+                  expect(res.body.message).to.equal('Email is already associated with an editor account');
+                  expect(res.body.location).to.equal('email');
+                })
+                .catch(err => {console.log(err, "error when trying to seedEditorData")})
             })
         });
-      it('Should create a new Editor', function () {
+      it('Should create a new Editor', function() {
         return chai
           .request(app)
           .post('/register')
@@ -164,7 +161,7 @@ describe('/editors', function(){
             lastName,
             password
           })
-          .then(res => {
+          .then(function(res) {
             // console.log(res.body);
             expect(res).to.have.status(201);
             expect(res.body).to.be.an('object');
@@ -177,16 +174,15 @@ describe('/editors', function(){
               email
             });
           })
-          .then(editor => {
+          .then(function(editor) {
             expect(editor).to.not.be.null;
             expect(editor.firstName).to.equal(firstName);
             expect(editor.lastName).to.equal(lastName);
             return editor.validatePassword(password)
           })
-          .then(passwordIsCorrect => {
+          .then(function(passwordIsCorrect) {
             expect(passwordIsCorrect).to.be.true;
           })
-          .then(() => {return tearDownDb()})
       });
       it('Should trim firstName and lastName', function() {
         return chai
@@ -198,7 +194,7 @@ describe('/editors', function(){
             firstName: ` ${firstName}`,
             lastName: ` ${lastName}`
           })
-          .then(res => {
+          .then(function(res) {
             expect(res).to.have.status(201);
             expect(res.body).to.be.an('object');
             expect(res.body).to.include.keys('email', 'firstName', 'lastName');
@@ -209,11 +205,11 @@ describe('/editors', function(){
               email
             });
           })
-          .then(editor => {
+          .then(function(editor) {
             expect(editor).to.not.be.null;
             expect(editor.firstName).to.equal(firstName);
             expect(editor.lastName).to.equal(lastName);
-          });
+          })
         });
     });
   })

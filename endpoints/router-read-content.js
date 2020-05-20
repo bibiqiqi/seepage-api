@@ -6,7 +6,6 @@ const mongoose = require('mongoose');
 const Grid = require('gridfs-stream');
 
 const {DATABASE_URL} = require('../config');
-const {upload} = require('../server');
 const {Content} = require('../models/content');
 
 const router = express.Router();

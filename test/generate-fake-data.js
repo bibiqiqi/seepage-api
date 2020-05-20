@@ -1,4 +1,5 @@
 const _ = require('underscore');
+const path = require('path')
 const fs = require('fs');
 const url = require('url');
 const faker = require('faker');
@@ -88,7 +89,6 @@ function genPostAndSeedPromise(categories, tagPool, token, user) {
     const tags = _.uniq(_.sortBy(pickTags(tagPool)), true)
     let generatedPost = await generatePost(category, tags);
     let seededPost = await seedPost(generatedPost, token, user);
-    // console.log('seeded a post', seededPost)
     resolve(seededPost)
   })
 }
@@ -122,23 +122,31 @@ function generatePost(category, tags) {
 function seedPost(post, token, user){
   return new Promise(function(resolve, reject) {
     const authToken = token(user);
+    // console.log('process.cwd() is', process.cwd())
+    // console.log('__dirname is', __dirname);
+    const filePath = path.join(__dirname, 'dummy-file-1.jpg');
+    // console.log('filePath is', filePath);
     return chai
       .request(app)
       .post('/protected/content')
       .set('authorization', `Bearer ${authToken}`)
-      .type('multipart/form')
+      .type('form')
       .field(Object.keys(post)[0], Object.values(post)[0])
       .field(Object.keys(post)[1], Object.values(post)[1])
       .field(Object.keys(post)[2], Object.values(post)[2])
       .field(Object.keys(post)[3], Object.values(post)[3])
       .field(Object.keys(post)[4], Object.values(post)[4])
-      .attach('files', fs.readFileSync('./test/dummy-file-1.jpg'), 'dummy-file-1.jpg')
+      .attach('files', fs.readFileSync(filePath), 'dummy-file-1')
+      // .attach('files', fs.readFile(filePath, (err, data) => {
+      //   if (err) throw err;
+      //   console.log('data was successfully sent')
+      // }))
       .then(res => {
-        // console.log('seeded a post', res)
+         console.log('seeding was a success')
         resolve(res);
       })
       .catch(err => {
-        // console.log('error in seeding post')
+        console.log('error in seeding post')
         reject(err);
       })
   })
@@ -148,11 +156,11 @@ function tearDownDb(){
   return new Promise((resolve, reject) => {
     mongoose.connection.dropDatabase()
       .then(result => {
-        console.log('deleted database')
+        // console.log('deleted database')
         resolve(result)
       })
       .catch(err => {
-        console.log('error in deleting database')
+        // console.log('error in deleting database')
         reject(err)
       })
   });

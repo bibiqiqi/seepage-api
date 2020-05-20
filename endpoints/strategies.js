@@ -10,7 +10,7 @@ const localStrategy = new LocalStrategy({
 },
 (email, password, callback) => {
     // console.log('-reached localStrategy! email and password received are:', email, password);
-  const lowerCaseEmail = email.toLowerCase();
+  const lowerCaseEmail = email.toLowerCase().trim();
   let editor;
   Editor.findOne({email: lowerCaseEmail})
     .then(_editor => {

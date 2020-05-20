@@ -64,7 +64,7 @@ function runServer(databaseUrl, port = PORT) {
           mongoose.disconnect();
           reject(err);
         });
-    });
+    }, { useNewUrlParser: true, useUnifiedTopology: true });
   });
 }
 
