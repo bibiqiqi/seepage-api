@@ -3,22 +3,19 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const passport = require('passport');
 const mongoose = require('mongoose');
-const Grid = require('gridfs-stream');
 
-const {DATABASE_URL} = require('../config');
 const {Content} = require('../models/content');
 
 const router = express.Router();
 
-//for gfs
+let gfs
 const mongoConn = mongoose.connection;
-let gfs;
-
-//define gfs stream
-mongoConn.once('open', () => {
-  gfs = Grid(mongoConn.db, mongoose.mongo);
-  gfs.collection('fs');
-})
+mongoConn.once("open", () => {
+  console.log('mongoose connection is open')
+  gfs = new mongoose.mongo.GridFSBucket(mongoConn.db, {
+    bucketName: "fs"
+  });
+});
 
 router.use(bodyParser.json());
 
@@ -37,22 +34,13 @@ router.get('/', (req, res) => {
 });
 
 //get endpoint for 1 file in gridFS
-router.get('/files/:fileId', (req, res) => {
-  //console.log('req.params.fileId is', req.params.fileId);
-  gfs.files.find({id: req.params.fileId}, function(err, file) {
-      if (err) {
-        return;
-      }
-      if (!file) {
-        return res.status(404).json({
-          error: 'file doesnt exist'
-        });
-      }
-      //console.log('file was found', file);
-      const readStream = gfs.createReadStream({_id: req.params.fileId});
-      readStream.pipe(res);
-    }
-  )
+router.get('/files/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const readableStream = gfs.openDownloadStreamByName(filename);
+  readableStream.pipe(res);
+  readableStream.on('error', () => {
+    res.status(500).json({ error: 'something went wrong' });
+  });
 })
 
 module.exports = {router};

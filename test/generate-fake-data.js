@@ -120,12 +120,10 @@ function generatePost(category, tags) {
 }
 
 function seedPost(post, token, user){
+  const file1 = path.join(__dirname, '/dummy-files/dummy-file-1.jpg');
+  const file2 = path.join(__dirname, '/dummy-files/dummy-file-2.jpg');
   return new Promise(function(resolve, reject) {
     const authToken = token(user);
-    // console.log('process.cwd() is', process.cwd())
-    // console.log('__dirname is', __dirname);
-    const filePath = path.join(__dirname, 'dummy-file-1.jpg');
-    // console.log('filePath is', filePath);
     return chai
       .request(app)
       .post('/protected/content')
@@ -136,13 +134,37 @@ function seedPost(post, token, user){
       .field(Object.keys(post)[2], Object.values(post)[2])
       .field(Object.keys(post)[3], Object.values(post)[3])
       .field(Object.keys(post)[4], Object.values(post)[4])
-      .attach('files', fs.readFileSync(filePath), 'dummy-file-1')
-      // .attach('files', fs.readFile(filePath, (err, data) => {
-      //   if (err) throw err;
-      //   console.log('data was successfully sent')
-      // }))
+      .attach('files', file1)
+      .attach('files', file2)
       .then(res => {
-         console.log('seeding was a success')
+        // console.log('seeding was a success', res.body)
+        resolve(res);
+      })
+      .catch(err => {
+        console.log('error in seeding post')
+        reject(err);
+      })
+  })
+}
+
+function seedPostWithUrl(post, token, user){
+  const file1 = path.join(__dirname, '/dummy-files/dummy-file-1.jpg');
+  const file2 = path.join(__dirname, '/dummy-files/dummy-file-2.jpg');
+  return new Promise(function(resolve, reject) {
+    const authToken = token(user);
+    return chai
+      .request(app)
+      .post('/protected/content')
+      .set('authorization', `Bearer ${authToken}`)
+      .type('form')
+      .field(Object.keys(post)[0], Object.values(post)[0])
+      .field(Object.keys(post)[1], Object.values(post)[1])
+      .field(Object.keys(post)[2], Object.values(post)[2])
+      .field(Object.keys(post)[3], Object.values(post)[3])
+      .field(Object.keys(post)[4], Object.values(post)[4])
+      .field('files', 'https://www.youtube.com/watch?v=z97qLNXeAMQ&list=RDz97qLNXeAMQ&start_radio=1')
+      .then(res => {
+        // console.log('seeding was a success', res.body)
         resolve(res);
       })
       .catch(err => {
@@ -166,4 +188,4 @@ function tearDownDb(){
   });
 }
 
-module.exports = {tearDownDb, genFakeDataPromises, realToken, realUser, genAndReturnPost, seedPost};
+module.exports = {tearDownDb, genFakeDataPromises, realToken, realUser, genAndReturnPost, seedPost, seedPostWithUrl};

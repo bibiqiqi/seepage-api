@@ -96,7 +96,7 @@ return Editor.find({email})
   .then(count => {
     // console.log('found', count);
     if (count > 0) {
-     console.log('there is already an editor in the DB with that email');
+     // console.log('there is already an editor in the DB with that email');
       //then there is an existing editor in the DB with this Email
       return res.status(422).json({
         code: 422,
@@ -120,7 +120,7 @@ return Editor.find({email})
     return res.status(201).json(editor.serialize());
   })
   .catch(err => {
-    console.log('sending err back')
+    // console.log('sending err back')
     return err
   });
 });

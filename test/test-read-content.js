@@ -2,9 +2,7 @@
 
 const chai = require('chai');
 const chaiHttp = require('chai-http');
- const mongoose = require('mongoose');
- const Grid = require('gridfs-stream');
- const fs = require('fs');
+const mongoose = require('mongoose');
 const { app } = require('../server');
 const { tearDownDb, genFakeDataPromises, realToken, realUser} = require('./generate-fake-data');
 const { Content } = require('../models/content');
@@ -12,15 +10,14 @@ const { Content } = require('../models/content');
 const expect = chai.expect;
 chai.use(chaiHttp);
 
-//for gfs
-const mongoConn = mongoose.connection;
 let gfs;
-//
-//define gfs stream
-mongoConn.once('open', function() {
-  gfs = Grid(mongoConn.db, mongoose.mongo);
-  gfs.collection('fs');
-})
+const mongoConn = mongoose.connection;
+mongoConn.once("open", () => {
+  console.log('mongoose connection is open')
+  gfs = new mongoose.mongo.GridFSBucket(mongoConn.db, {
+    bucketName: "fs"
+  });
+});
 
 describe('Content endpoints', function () {
   this.timeout(5000);
@@ -31,6 +28,10 @@ describe('Content endpoints', function () {
       return Promise.all(fakeDataPromises);
     })
   });
+
+  after(function() {
+    return tearDownDb()
+  })
 
   describe('GET', function () {
     describe('/content', function () {
@@ -45,11 +46,12 @@ describe('Content endpoints', function () {
             return Content.count();
           })
           .then(function(count) {
-              expect(_res.body).to.have.lengthOf(count);
-              return gfs.files.count();
+            expect(_res.body).to.have.lengthOf(count);
+            const filesQuery = gfs.find().toArray();
+            return filesQuery;
           })
-          .then(function(count) {
-            // console.log('count returned is', count);
+          .then(function(files) {
+            const count = files.length;
             let totalFiles = 0;
             _res.body.map(function(e) {
               totalFiles += e.files.length
@@ -88,13 +90,13 @@ describe('Content endpoints', function () {
       });
       describe('/content/:contentId', function () {
         it('should return the requested content', function() {
-          let fileId;
+          let filename;
           return Content
             .findOne()
             .then(function(content) {
-              fileId = content.files[0].fileId
+              filename = content.files[0].fileName
               return chai.request(app)
-                .get(`/content/files/${fileId}`)
+                .get(`/content/files/${filename}`)
                 .then(function(res) {
                   expect(res).to.have.status(200);
                 })

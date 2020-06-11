@@ -3,434 +3,384 @@ const bodyParser = require('body-parser');
 const passport = require('passport');
 const mongoose = require('mongoose');
 const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const Grid = require('gridfs-stream');
+const multer = require("multer");
+const GridFsStorage = require("multer-gridfs-storage");
+const crypto = require("crypto");
+const path = require("path");
 const util = require('util');
-const multiparty = require('multiparty');
 const async = require('async');
-const Binary = require('mongodb').Binary;
+const {DATABASE_URL, TEST_DATABASE_URL} = require('../config');
 
 const {Content, File} = require('../models/content');
 const {validateFields} = require('./validators');
 
 const router = express.Router();
 const jwtAuth = passport.authenticate('jwt', { session: false });
-//for gfs
-const mongoConn = mongoose.connection;
-
-multiparty
-let gfs;
-//define gfs stream
-mongoConn.once('open', () => {
-  gfs = Grid(mongoConn.db, mongoose.mongo);
-  gfs.collection('fs');
-})
-
-// //multer
-// let gfs;
-// conn.once("open", () => {
-//   // init stream
-//   gfs = new mongoose.mongo.GridFSBucket(conn.db, {
-//     bucketName: "uploads"
-//   });
-// });
 
 router.use(bodyParser.json({limit: '50mb', extended: true}));
 
-//uses multiparty to parse incoming multipart/form data
-//saves to tmp dir and returns an object with fields and files key/value pairs
-function parseForm(request) {
-  return new Promise(function(resolve, reject) {
-    let resolveObject = {};
-    const form = new multiparty.Form();
-    form.parse(request, function(err, fields, files) {
-      if(err){
-        console.log('err is', err)
-        reject(err);
-      }
-      if(files) {
-        console.log('returning files from multiparty parsing', files);
-        resolveObject.files = files.files;
-      }
-      if(fields) {
-        console.log('returning fields from multiparty parsing');
-        resolveObject.fields = fields;
-      }
-      console.log('returning parse object from parseForm');
-      resolve(resolveObject);
-    });
-  })
-}
+let gfs
+const mongoConn = mongoose.connection;
 
-//uploads only the text-based fields for a content entry
-//returns a promise that resolves with the inserted document
- function insertContent(fieldsObject) {
-   return new Promise(function(resolve, reject) {
-     Content
-       .create({
-         artistName: fieldsObject.artistName[0],
-         title: fieldsObject.title[0],
-         description: fieldsObject.description[0],
-         category: fieldsObject.category,
-         tags: fieldsObject.tags,
-       }, function(err, insertedContent) {
-         if(err) {
-           //console.log('returning promise reject from insertContent in mongo');
-           reject(err)
-         } else {
-           //console.log('returning promise resolve from insertContent in mongo');
-           resolve(insertedContent)
-         }
-      })
-   })
-}
-
-//generates fileName and returns it. called by uploadFilesAndSubDocs
-function makeFileName(doc, file, index) {
-  const ext = file.originalFilename.split('.').slice(-1).join('.');
-  const _artistName = doc.artistName.replace(/ /g, '_');
-  const _title = doc.title.replace(/ /g, '_');
-  const fileName = `${_artistName}_${_title}_${index}.${ext}`;
-  return fileName
-}
-
-//inserts file subDoc into mongo and returns the parent doc
-function insertFileSubDoc(contentId, uploadedFile, fileName) {
-  return new Promise(function(resolve, reject) {
-    Content.
-    findByIdAndUpdate(
-      contentId,
-      {$push:
-        {files: {
-          fileType: uploadedFile.metadata.fileType,
-          fileName: fileName,
-          fileId: uploadedFile._id
-        }}
-      },
-      {'new': true})
-    .then(updatedDoc => {
-      //console.log('inserted subDoc and this is the updated doc', updatedDoc);
-      resolve(updatedDoc);
-    })
-    .catch(err => reject(err));
-  })
-}
-
-function insertUrlSubDoc(contentId, file) {
-  //console.log('****file passed to insertUrlSubDoc is', file);
-  return new Promise(function(resolve, reject) {
-    Content.
-    findByIdAndUpdate(
-      contentId,
-      {$push:
-        {files: {
-          fileType: 'video',
-          fileUrl: file
-        }}
-      },
-      {'new': true})
-    .then(updatedDoc => {
-      //console.log('inserted subDoc and this is the updated doc', updatedDoc);
-      resolve(updatedDoc);
-    })
-    .catch(err => reject(err));
-  })
-}
-
-//takes array of file ids and the parent id as argument, removes all fils subdocs that
-//match the file id and returns the post-edited parent doc of
-function removeSubDocs(filesIdsArray, contentId){
-  //console.log('doing removeSubDocs');
-  return new Promise(function(resolve, reject) {
-    Content.findByIdAndUpdate( //first delete the file from the Content collection
-      contentId,
-      {$pull: {files: {fileId: {$in: (filesIdsArray)}}}},
-      {'new': true},
-      (error, modified) => {
-        if (error) {
-          //console.log('returning a promise reject from trying to remove fileSubdocs in mongo')
-          reject(error)
-        } else {
-          //console.log('returning a promise resolve from trying to remove fileSubdocs in mongo:', modified)
-          resolve(modified)
-        }
-      }
-    )
-  })
-}
-
-//uses grid-fs stream to write file to GridFS, and promise resolves with the uploaded file
-function uploadFile(file, fileName){
-  return new Promise(function(resolve, reject) {
-    const fileType = file.headers["content-type"];
-    const writestream = gfs.createWriteStream(
-      {
-        filename: fileName,
-        metadata: {
-          fileType: fileType
-        }
-      }
-    );
-    fs.createReadStream(file.path).pipe(writestream);
-    writestream.on("error", (error) => {
-      //console.log('returning a promise reject from trying to write files to gridfs');
-      reject(error)
-    });
-    writestream.on("close", (uploadedFile) => {
-      //console.log('returning a promise resolveß from trying to write files to gridfs');
-      resolve(uploadedFile);
-    })
+mongoConn.once("open", () => {
+  gfs = new mongoose.mongo.GridFSBucket(mongoConn.db, {
+    bucketName: "fs"
   });
-}
 
-//called after uploadFile to delete the files that multiparty writes to disk,
-//once the file has been uploaded to gridFS
-function deleteTempFile(file) {
-  return new Promise(function(resolve, reject) {
-    var filePath = file.path;
-    fs.unlink(filePath, function(err){
-      if(err) {
-        reject(err)
-      } else {
-        resolve();
-      }
-    });
-  })
-}
+  const storage = new GridFsStorage({
+    url: mongoConn.client.s.url,
+    file: (req, file) => {
+      return new Promise((resolve, reject) => {
+        crypto.randomBytes(16, (err, buf) => {
+          if (err) {
+            return reject(err);
+          }
+          const filename = buf.toString("hex") + path.extname(file.originalname);
+          const fileInfo = {
+            filename: filename,
+            bucketName: 'fs'
+          };
+          resolve(fileInfo);
+        });
+      });
+    }
+  });
 
-//accepts the array of files that need to be uploaded, and maps all the necessary
-//functions to upload the file subdocs to mongo and files to gridFS
-function uploadFilesAndSubDocs(files, doc){
-  // console.log('files passed to uplodFilesAndSubDocs are', files);
-  return Promise.all(files.map((file, index) => {
-    // console.log('doing uploadFilesAndSubDocs');
-    return new Promise(async function(resolve, reject) {
-      let modifiedDoc
-      if(file.originalFilename) {
-        let fileName = makeFileName(doc, file, index);
-        // console.log('fileName is', fileName);
-        let uploadedFile = await uploadFile(file, fileName);
-        // console.log('file was uploaded', uploadedFile);
-        let deletedTempFiles = await deleteTempFile(file);
-        modifiedDoc = await insertFileSubDoc(doc.id, uploadedFile, fileName);
-      } else {
-        // console.log('there is no file.originalFilename')
-        modifiedDoc = await insertUrlSubDoc(doc.id, file);
-      }
-      // console.log('subDoc was inserted', modifiedDoc);
-      resolve(modifiedDoc);
-    })
-  }))
-}
+  const upload = multer({storage});
 
-//accepts an array of file ids, deletes the associated files from
-//grid fs and returns an array of the files deleted
-function removeFiles(filesArray){
-  //console.log('doing removeFiles with ');
-  return new Promise(function(resolve, reject) {
-     gfs.files
-       .deleteMany(
-         {_id : {$in: filesArray}},
-         function(err, files) {
-           if(err){
-             //console.log('returning a promise reject from trying to remove files in gridfs')
+  //uploads only the text-based fields for a content entry
+  //returns a promise that resolves with the inserted document
+   function insertContent(fieldsObject) {
+     return new Promise(function(resolve, reject) {
+       Content
+         .create({
+           artistName: fieldsObject.artistName,
+           title: fieldsObject.title,
+           description: fieldsObject.description,
+           category: fieldsObject.category,
+           tags: fieldsObject.tags,
+         }, function(err, insertedContent) {
+           if(err) {
+             //console.log('returning promise reject from insertContent in mongo');
              reject(err)
            } else {
-             //console.log('returning a promise resolve from trying to remove files in gridfs')
-             resolve(files);
+             //console.log('returning promise resolve from insertContent in mongo');
+             resolve(insertedContent)
            }
-         }
-       )
-   })
-}
-
-//post endpoint for new content entry - uploads parent and child doc at once
-router.post('/content', jwtAuth, (req, res ) => {
-  // console.log('received a request', req.headers);
-  // console.log('received a request', req.headers);
-  const form = new multiparty.Form();
-  // const content = {};
-
-  // form.on('error', function(err) {
-  //   console.log('Error parsing form: ' + err.stack);
-  // });
-  //
-  // // Parts are emitted when parsing the form
-  // form.on('part', function(part) {
-  //   // You *must* act on the part by reading it
-  //   // NOTE: if you want to ignore it, just call "part.resume()"
-  //
-  //   // console.log('part.headers is', part.headers);
-  //   // part.resume()
-  //
-  //   // if(part.headers['content-type']) {
-  //   //   console.log('theres a part.headers.filename')
-  //   //   console.log('part.filename is', part.filename);
-  //   //   part.resume()
-  //   // }
-  //
-  //   if (!part.filename) {
-  //     // filename is not defined when this is a field and not a file
-  //     console.log('got field named ' + part.name);
-  //     // ignore field's content
-  //     part.resume();
-  //   }
-  //
-  //   if (part.filename) {
-  //     // filename is defined when this is a file
-  //     // console.log('got file', part)
-  //     console.log('got file named ' + part.name);
-  //     // ignore file's content here
-  //     part.resume();
-  //   }
-  //
-  //   part.on('error', function(err) {
-  //     console.log('theres an error', err)
-  //   });
-  // });
-  //
-  // // Close emitted after form parsed
-  // form.on('close', function() {
-  //   console.log('Upload completed!');
-  //   // res.setHeader('text/plain');
-  //   // res.end('Received ' + count + ' files');
-  // });
-  //
-  // // Parse req
-  // form.parse(req);
-
-
-  try {
-    parseForm(req)
-      .then(parseObject => {
-        return new Promise(async function(resolve, reject) {
-          //actual fields + any video urls that are under fields.files
-          // console.log('parseObject is', parseObject)
-          const {fields} = parseObject;
-          //if there was a files key, copy those over to the files constant, otherwise, create an empty array
-          const files = parseObject.files? parseObject.files : [];
-          // console.log('files are', files);
-          // console.log('fields are', fields);
-          if(fields.files) {
-            fields.files.forEach(e => {
-              files.push(e);
-            })
-          }
-          delete fields.files;
-          // console.log('files array is now', files);
-          // console.log('deleted fields.files and now its', files);
-          let insertedContent = await insertContent(fields);
-          // console.log('content was inserted', insertedContent);
-          let uploadedDoc = await uploadFilesAndSubDocs(files, insertedContent)
-          // console.log('uploadedDoc is', uploadedDoc)
-          res.status(201).json(uploadedDoc[0].serialize())
         })
-      })
-  } catch(err) {
-    res.status(500).json({error: err});
-  }
-});
-
-//patch endpoint for a text-based field. replaces the field with the new
-//entry and returns the full parent doc
-router.patch('/content/:contentId', jwtAuth, (req, res) => {
-  const contentId = req.params.contentId;
-  Content
-    .findByIdAndUpdate(
-      contentId,
-      req.body,
-      {new: true}
-    )
-    .then(edited => {
-      res.status(201).json(edited.serialize())
-    })
-    .catch(err => {
-    console.error(err);
-    res.status(500).json({error: 'Something went wrong'});
-    })
-})
-
-//patch endpoint for a file. accepts file removal and additions
-//and returns the parent doc that was edited
-router.patch('/files/:contentId', jwtAuth, (req, res) => {
-  //for editing the files (subdocs in mongod and files in gridFs)
-  const contentId = req.params.contentId;
-  // console.log('you reached patch endpoint and contendId is', contentId);
-  const form = new multiparty.Form();
-
-  try {
-    parseForm(req)
-      .then(async parsedObject => {
-        const {files: addFiles, fields} = parsedObject;
-        // console.log('addFiles is', addFiles);
-        const deleteFiles = fields.files;
-        // console.log('deleteFiles is', deleteFiles);
-
-        function successResponse(results) {
-          // console.log('sending result from edited doc to the client', results);
-          res.status(200).json(results.serialize())
-        }
-
-        if(addFiles && deleteFiles){ //user wants to remove and add files
-          let doc = await Content.findById(contentId);
-          return Promise.all([
-            removeSubDocs(deleteFiles, contentId),
-            removeFiles(deleteFiles),
-            uploadFilesAndSubDocs(addFiles, doc)
-          ]).then(modifiedDocArray => {
-              // successResponse(modifiedDocArray[2][0].files);
-              successResponse(modifiedDocArray[2][0]);
-            })
-        } else if(!addFiles && deleteFiles) {//user just wants to remove files
-          return Promise.all([
-            removeSubDocs(deleteFiles, contentId),
-            removeFiles(deleteFiles)
-          ]).then(modifiedDocArray => {
-              //console.log('success!');
-              successResponse(modifiedDocArray[0]);
-            })
-        } else if(addFiles && !deleteFiles) {//user just wants to add files
-          Content.findById(contentId)
-            .then(doc => {
-              uploadFilesAndSubDocs(addFiles, doc)
-                .then(modifiedDocArray => {
-                  successResponse(modifiedDocArray[0]);
-                })
-            })
-        }
      })
-  } catch(err) {
-    res.status(500).json({error: err});
   }
-});
 
-//delete endpoint for full document
-router.delete('/content/:contentId', jwtAuth, (req, res) => {
-  //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
-  Content
-    .findByIdAndRemove(req.params.contentId)
-    .then((deletedContent) => {
-      //console.log('the content that was deleted from Mongo is:', deletedContent);
-      const deleteFiles = deletedContent.files.map(e => {
-        if(e.fileId) {
-          return e.fileId
+  function insertUrlSubDoc(contentId, file) {
+    //console.log('****file passed to insertUrlSubDoc is', file);
+    return new Promise(function(resolve, reject) {
+      Content.
+      findByIdAndUpdate(
+        contentId,
+        {$push:
+          {files: {
+            fileType: 'video',
+            fileUrl: file
+          }}
+        },
+        {'new': true})
+      .then(updatedDoc => {
+        //console.log('inserted subDoc and this is the updated doc', updatedDoc);
+        resolve(updatedDoc);
+      })
+      .catch(err => reject(err));
+    })
+  }
+
+  //inserts file subDoc into mongo and returns the parent doc
+  function insertFileSubDoc(contentId, uploadedFile) {
+    return new Promise(function(resolve, reject) {
+      // console.log('uploadedfile passed to insertFileSubDoc is', uploadedFile)
+      Content.
+      findByIdAndUpdate(
+        contentId,
+        {$push:
+          {files: {
+            fileType: uploadedFile.mimetype,
+            fileName: uploadedFile.filename,
+            fileId: uploadedFile.id
+          }}
+        },
+        {'new': true})
+      .then(updatedDoc => {
+        // console.log('inserted subDoc and this is the updated doc', updatedDoc);
+        resolve(updatedDoc);
+      })
+      .catch(err => reject(err));
+    })
+  }
+
+  function uploadSubDoc(file, contentId) {
+    //console.log('file passed to uploadSubdoc is', file);
+    return new Promise(async function(resolve, reject) {
+      try {
+        let modifiedDoc
+        if(file.originalname) {
+          modifiedDoc = await insertFileSubDoc(contentId, file);
+        } else {
+          // console.log('there is no file.originalFilename')
+          modifiedDoc = await insertUrlSubDoc(contentId, file);
+        }
+        // console.log('subDoc was inserted', modifiedDoc);
+        resolve(modifiedDoc);
+      } catch(err) {
+        // console.log('there was an error in uploading subDoc', err);
+        reject(err);
+      }
+    })
+  }
+
+  function uploadSubDocs(files, contentId) {
+    //console.log('files passed to uploadSubDocs is', files)
+    return Promise.all(files.map(file => {
+      return uploadSubDoc(file, contentId)
+    }))
+  }
+
+  router.post('/content', jwtAuth, upload.array('files'), (req, res) => {
+    //console.log('req.body is', req.body)
+    //console.log('req.files is', req.files)
+    const content = req.body;
+    let files = [];
+    if(req.files.length) {
+      files.push(...req.files)
+    }
+    if(req.body.files) {
+      if (Array.isArray(req.body.files)) {
+        files.push(...req.body.files)
+      } else {
+        files.push(req.body.files)
+      }
+      delete req.body.files;
+    }
+    //console.log('files is', files)
+    insertContent(content)
+      .then(insertedContent => {
+        //console.log('insertedContent is', insertedContent)
+        return uploadSubDocs(files, insertedContent.id) //resolves with the complete doc
+          .then(completedDocArray => {
+            //console.log('completedDocArray[completedDocArray.length-1] is', completedDocArray[completedDocArray.length-1])
+            res.status(201).json(completedDocArray[completedDocArray.length-1].serialize())
+          })
+          .catch((err) => {
+            //console.log('sending an error back 1')
+            res.status(500).json({error: err});
+          })
+      })
+      .catch((err) => {
+        // console.log('sending an error back 2')
+        res.status(500).json({error: err});
+      })
+  })
+
+  //queries mongo for parent Content doc of files that need to be removed
+  //finds which of those files have corresponding gridFs files and makes array of the gridFs ids
+  //callsremoveSubDocs and if need be, called removeFiles and passes on array of gridFs ids
+  //returns a promise which resolves to the parent Content doc, after subdocs were removed
+  function remSubDocsAndFiles(subDocIdsArray, contentId) {
+    return new Promise(function(resolve, reject) {
+      Content.findById(contentId, function (err, contentDoc) {
+        if(err) {
+          res.status(500).json({error: err});
+        }
+        let removeFromGfs = [];
+        contentDoc.files.forEach(e => {
+          if(e.fileId) {
+            removeFromGfs.push(e.fileId);
+          }
+        });
+        //console.log('removeFromGfs array is', removeFromGfs)
+        removeSubDocs(subDocIdsArray, contentId)
+          .then(modifiedDoc => {
+            // console.log('removed subDocs and modifiedDoc is', modifiedDoc);
+            if(removeFromGfs.length) {
+              //console.log('calling removeFiles')
+              removeFiles(removeFromGfs)
+                .then(() => {
+                  resolve(modifiedDoc)
+                })
+             } else {
+               resolve(modifiedDoc)
+             }
+          })
+       })
+    })
+  }
+
+  //takes array of file ids and the parent id as argument, removes all fils subdocs that
+  //match the file id and returns the post-edited parent doc of
+  function removeSubDocs(subDocIdsArray, contentId){
+    //console.log('doing removeSubDocs');
+    return new Promise(function(resolve, reject) {
+      Content.findByIdAndUpdate( //first delete the file from the Content collection
+        contentId,
+        {$pull: {files: {_id: {$in: (subDocIdsArray)}}}},
+        {'new': true},
+        (error, modified) => {
+          if (error) {
+            //console.log('returning a promise reject from trying to remove fileSubdocs in mongo')
+            reject(error)
+          } else {
+            //console.log('returning a promise resolve from trying to remove fileSubdocs in mongo:', modified)
+            resolve(modified)
+          }
+        }
+      )
+    })
+  }
+
+  // accepts an array of file ids, deletes the associated files from
+  // grid fs and returns an array of the files deleted
+  function removeFiles(gfsIdsArray){
+    return Promise.all(gfsIdsArray.map(id => {
+      gfs.delete(new mongoose.Types.ObjectId(id), (err, data) => {
+        if (err) {
+          //console.log('there was an err in deleting files', err)
+          return err;
+        } else {
+          //console.log('success in deleting file', data)
+          return data
         }
       })
-      gfs.files
-        .deleteMany({id: deleteFiles})
-        .then(() => {
-          res.status(204).end();
-        })
-        .catch(err => {
-          console.error(err);
-          res.status(500).json({error: 'Something went wrong'});
-        });
-    })
-    .catch(err => {
+    }))
+  }
+
+  // patch endpoint for a text-based field. replaces the field with the new
+  // entry and returns the full parent doc
+  router.patch('/content/:contentId', jwtAuth, (req, res) => {
+    const contentId = req.params.contentId;
+    Content
+      .findByIdAndUpdate(
+        contentId,
+        req.body,
+        {new: true}
+      )
+      .then(edited => {
+        res.status(201).json(edited.serialize())
+      })
+      .catch(err => {
       console.error(err);
       res.status(500).json({error: 'Something went wrong'});
-    })
+      })
+  })
+
+  //patch endpoint for a file. accepts file removal and additions
+  //and returns the parent doc that was edited
+  router.patch('/files/:contentId', jwtAuth, upload.array('files'), async (req, res) => {
+    // //for editing the files (subdocs in mongod and files in gridFs)
+    const contentId = req.params.contentId;
+    // //console.log('you reached patch endpoint and contendId is', contentId);
+    // console.log(
+    // 'server:',
+    //   'req.files is', req.files,
+    // )
+    const addFiles = req.files ? req.files : [];
+    const deleteFiles = [];
+
+    console.log('req.body.files is', req.body.files)
+    if(req.body.files) {
+      const files = Array.isArray(req.body.files) ? req.body.files : [req.body.files];
+      files.forEach(e => {
+        if(e.charAt(0) === '/') { //that means that it's a url (starts with '//'), so you're adding a video url
+          addFiles.push(e)
+        } else {
+          deleteFiles.push(e)
+        }
+      })
+    }
+
+    console.log('addFiles is', addFiles);
+    console.log('deleteFiles is', deleteFiles);
+    //
+    function successResponse(results) {
+      //console.log('sending result from edited doc to the client', results);
+      return res.status(200).json(results.serialize())
+    }
+    //
+    try {
+      if(addFiles.length && deleteFiles.length){ //user wants to remove and add files
+        console.log('you want to add and delete files')
+        let doc = await Content.findById(contentId);
+        return remSubDocsAndFiles(deleteFiles, contentId)
+        .then(modifiedParentDoc => {
+          return uploadSubDocs(addFiles, contentId)
+            .then(modifiedDocArray => {
+              // console.log('sending back this modified parent doc', modifiedDocArray[modifiedDocArray.length-1])
+              successResponse(modifiedDocArray[modifiedDocArray.length-1]);
+            })
+        })
+          ////queries Content collection and returns an array of GFS ids of files that needs to
+          //be removed from GridFs
+          ////calls RemoveSubDocs to actually remove the necessary file subDocs with array of subDoc Ids
+          ////passes the array of GFS ids from first query on to removeFiles(array of GFS ids)
+          //removeFiles() doesn't need to return anything
+          //calls uploadSubDocs(addFiles, contentId) and returns the corrected Content doc to send back to client
+      } else if(!addFiles.length && deleteFiles.length) {//user just wants to remove files
+          //console.log('you want to just delete files')
+          return remSubDocsAndFiles(deleteFiles, contentId)
+            ////queries Content collection and returns an array of GFS ids of files that needs to
+            //be removed from GridFs
+            ////calls removeSubDocs to actually remove the necessary file subDocs with array of subDoc Ids
+            ////passes the array of GFS ids from first query on to removeFiles(array of GFS ids)
+            ////removeSubDocs needs to return the completed Content doc back to the client
+            //removeFiles() doesn't need to return anything
+            .then(modifiedParentDoc => {
+              //console.log('modifiedDocArray is', modifiedParentDoc)
+              successResponse(modifiedParentDoc);
+            })
+        } else if(addFiles.length && !deleteFiles.length) {//user just wants to add files
+          console.log('you want to just add files')
+          return uploadSubDocs(addFiles, contentId)
+            .then(modifiedDocArray => {
+              //console.log('modifiedDoc sending back is',
+              // modifiedDocArray
+               // modifiedDocArray[modifiedDocArray.length-1])
+              successResponse(modifiedDocArray[modifiedDocArray.length-1]);
+            })
+        }
+      } catch(err) {
+        res.status(500).json({error: err});
+      }
+  });
+
+
+  // delete endpoint for full document
+  router.delete('/content/:contentId', jwtAuth, (req, res) => {
+    //console.log('request reached the endpoint and the contentId is:', req.params.contentId);
+    Content
+      .findByIdAndRemove(req.params.contentId)
+      .then((deletedContent) => {
+        // console.log('the content that was deleted from Mongo is:', deletedContent);
+        const deleteFiles = deletedContent.files.map(e => {
+          if(e.fileId) {
+            return e.fileId
+          }
+        });
+        // console.log('deleteFiles are:', deleteFiles);
+        return Promise.all(deleteFiles.map(fileId => {
+          gfs.delete(new mongoose.Types.ObjectId(fileId), (err, data) => {
+            if (err) {
+              // console.log('there was an error when deleting content', err)
+              return res.status(500).json({error: 'Something went wrong'});
+            }
+          })
+        })).then(() => res.status(204).end())
+      })
+      .catch(err => {
+        console.error(err);
+        res.status(500).json({error: 'Something went wrong'});
+      })
+  });
+
 });
+
+
+
+
 
 module.exports = {router};

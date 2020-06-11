@@ -1,10 +1,9 @@
-const { app, runServer, closeServer } = require('../server');
+const { app, closeServer, runServer } = require('../server');
 const { TEST_DATABASE_URL } = require('../config');
 
 describe('all tests', function() {
-
   before(function() {
-    runServer(TEST_DATABASE_URL)
+    return runServer(TEST_DATABASE_URL)
   });
 
   after(function() {
