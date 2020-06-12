@@ -86,4 +86,4 @@ if (require.main === module) {
   runServer(DATABASE_URL)
 }
 
-module.exports = { runServer, app, closeServer };
+module.exports = { runServer, app, closeServer};
