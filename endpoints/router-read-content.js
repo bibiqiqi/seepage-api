@@ -11,7 +11,7 @@ const router = express.Router();
 let gfs
 const mongoConn = mongoose.connection;
 mongoConn.once("open", () => {
-  console.log('mongoose connection is open')
+  //console.log('mongoose connection is open')
   gfs = new mongoose.mongo.GridFSBucket(mongoConn.db, {
     bucketName: "fs"
   });
